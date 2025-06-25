@@ -4,23 +4,33 @@ import ora from 'ora';
 import chalk from 'chalk';
 
 export class AIProcessor {
-  constructor(apiKey, verbose = false) {
+  constructor(apiKey, verbose = false, aiConfig = {}) {
     this.verbose = verbose;
     
     if (!apiKey) {
       throw new Error('OpenAI API key is required. Run "npm start check-config" to verify your configuration.');
     }
     
-    this.model = openai('gpt-4o-mini');
+    // Apply AI configuration with defaults
+    this.config = {
+      maxTokens: 8000,
+      batchSize: 3,
+      model: 'gpt-4o',
+      ...aiConfig
+    };
+    
+    this.model = openai(this.config.model);
     
     if (this.verbose) {
       console.log(chalk.gray('🔧 [VERBOSE] AI Processor initialized'));
-      console.log(chalk.gray(`🔧 [VERBOSE] Model: gpt-4o-mini`));
+      console.log(chalk.gray(`🔧 [VERBOSE] Model: ${this.config.model}`));
+      console.log(chalk.gray(`🔧 [VERBOSE] Max Tokens: ${this.config.maxTokens}`));
+      console.log(chalk.gray(`🔧 [VERBOSE] Batch Size: ${this.config.batchSize}`));
       console.log(chalk.gray(`🔧 [VERBOSE] API Key: ${apiKey.substring(0, 8)}...`));
     }
   }
 
-  async generateReleaseNotes(prData, jiraTickets, month) {
+  async generateReleaseNotes(prData, jiraTickets, month, repoConfig = null) {
     const spinner = ora('Generating release notes with AI...').start();
     
     if (this.verbose) {
@@ -28,6 +38,9 @@ export class AIProcessor {
       console.log(chalk.gray(`\n🔧 [VERBOSE] Starting AI generation for ${prData.length} PRs`));
       console.log(chalk.gray(`🔧 [VERBOSE] JIRA tickets available: ${jiraTickets.length}`));
       console.log(chalk.gray(`🔧 [VERBOSE] Target month: ${month}`));
+      if (repoConfig) {
+        console.log(chalk.gray(`🔧 [VERBOSE] Repository: ${repoConfig.name} (${repoConfig.repo})`));
+      }
     }
     
     try {
@@ -38,7 +51,7 @@ export class AIProcessor {
         console.log(chalk.gray(`🔧 [VERBOSE] PRs enhanced with JIRA data: ${withJira.length}/${enhancedPRs.length}`));
       }
       
-      const groupedChanges = this.groupChangesByType(enhancedPRs);
+      const groupedChanges = this.groupChangesByType(enhancedPRs, repoConfig);
       
       if (this.verbose) {
         console.log(chalk.gray('🔧 [VERBOSE] Changes grouped by type:'));
@@ -47,7 +60,7 @@ export class AIProcessor {
         });
       }
       
-      const releaseNotesData = await this.processInBatches(groupedChanges, month);
+      const releaseNotesData = await this.processInBatches(groupedChanges, month, repoConfig);
       
       if (this.verbose) {
         const totalEntries = Object.values(releaseNotesData).flat().length;
@@ -117,7 +130,7 @@ export class AIProcessor {
     return matches ? [...new Set(matches)] : [];
   }
 
-  groupChangesByType(enhancedPRs) {
+  groupChangesByType(enhancedPRs, repoConfig = null) {
     const groups = {
       features: [],
       bugs: [],
@@ -126,7 +139,7 @@ export class AIProcessor {
     };
 
     enhancedPRs.forEach(pr => {
-      const category = this.categorizeChange(pr);
+      const category = this.categorizeChange(pr, repoConfig);
       groups[category].push(pr);
       
       if (this.verbose) {
@@ -137,32 +150,35 @@ export class AIProcessor {
     return groups;
   }
 
-  categorizeChange(pr) {
+  categorizeChange(pr, repoConfig = null) {
     const title = pr.title.toLowerCase();
     const labels = pr.labels.map(label => label.toLowerCase());
     const jiraTypes = pr.relatedTickets.map(ticket => ticket.issueType.toLowerCase());
     
     const allText = [title, ...labels, ...jiraTypes].join(' ');
     
-    // More sophisticated categorization for customer-focused releases
+    // Enhanced categorization for customer-focused releases
     if (allText.includes('feature') || allText.includes('new') || allText.includes('story') || 
-        allText.includes('add') || allText.includes('implement') || allText.includes('create')) {
+        allText.includes('add') || allText.includes('implement') || allText.includes('create') ||
+        allText.includes('introduce') || allText.includes('enable')) {
       return 'features';
     }
     if (allText.includes('bug') || allText.includes('fix') || allText.includes('hotfix') || 
-        allText.includes('resolve') || allText.includes('error') || allText.includes('issue')) {
+        allText.includes('resolve') || allText.includes('error') || allText.includes('issue') ||
+        allText.includes('patch') || allText.includes('correct')) {
       return 'bugs';
     }
     if (allText.includes('improvement') || allText.includes('enhance') || allText.includes('refactor') || 
         allText.includes('optimize') || allText.includes('performance') || allText.includes('update') ||
-        allText.includes('upgrade') || allText.includes('better')) {
+        allText.includes('upgrade') || allText.includes('better') || allText.includes('streamline') ||
+        allText.includes('polish') || allText.includes('cleanup')) {
       return 'improvements';
     }
     
     return 'other';
   }
 
-  async processInBatches(groupedChanges, month) {
+  async processInBatches(groupedChanges, month, repoConfig = null) {
     const sections = {};
     let totalAPIRequests = 0;
     
@@ -173,11 +189,11 @@ export class AIProcessor {
         console.log(chalk.gray(`\n🔧 [VERBOSE] Processing category: ${category} (${prs.length} PRs)`));
       }
       
-      const batches = this.createBatches(prs, 5); // Process 5 PRs at a time
+      const batches = this.createBatches(prs, this.config.batchSize);
       const processedBatches = [];
       
       if (this.verbose) {
-        console.log(chalk.gray(`🔧 [VERBOSE] Split into ${batches.length} batches`));
+        console.log(chalk.gray(`🔧 [VERBOSE] Split into ${batches.length} batches (size: ${this.config.batchSize})`));
       }
       
       for (let i = 0; i < batches.length; i++) {
@@ -188,7 +204,7 @@ export class AIProcessor {
         }
         
         try {
-          const batchResult = await this.processBatch(batch, category);
+          const batchResult = await this.processBatch(batch, category, repoConfig);
           processedBatches.push(batchResult);
           totalAPIRequests++;
           
@@ -229,14 +245,14 @@ export class AIProcessor {
     return batches;
   }
 
-  async processBatch(prBatch, category) {
-    const prompt = this.buildPrompt(prBatch, category);
+  async processBatch(prBatch, category, repoConfig = null) {
+    const prompt = this.buildPrompt(prBatch, category, repoConfig);
     
     if (this.verbose) {
       console.log(chalk.gray('🔧 [VERBOSE] OpenAI API Request Details:'));
-      console.log(chalk.gray(`  Model: gpt-4o-mini`));
+      console.log(chalk.gray(`  Model: ${this.config.model}`));
       console.log(chalk.gray(`  Temperature: 0.3`));
-      console.log(chalk.gray(`  Max Tokens: 1000`));
+      console.log(chalk.gray(`  Max Tokens: ${this.config.maxTokens}`));
       console.log(chalk.gray(`  Prompt length: ${prompt.length} characters`));
       console.log(chalk.gray(`  PRs in batch: ${prBatch.map(pr => `#${pr.number}`).join(', ')}`));
     }
@@ -248,7 +264,7 @@ export class AIProcessor {
         model: this.model,
         prompt,
         temperature: 0.3,
-        maxTokens: 1000
+        maxTokens: this.config.maxTokens
       });
       
       const duration = Date.now() - startTime;
@@ -318,7 +334,7 @@ export class AIProcessor {
     }
   }
 
-  buildPrompt(prBatch, category) {
+  buildPrompt(prBatch, category, repoConfig = null) {
     const prDescriptions = prBatch.map(pr => {
       const jiraContext = pr.relatedTickets.length > 0 
         ? `\nRelated tickets: ${pr.relatedTickets.map(t => `${t.key}: ${t.summary}`).join(', ')}`

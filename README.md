@@ -1,239 +1,349 @@
 # Release Notes Generator
 
-An intelligent tool that automatically generates customer-facing release notes by analyzing GitHub pull requests and associated JIRA tickets using AI. Perfect for SaaS products that need to communicate monthly releases and feature updates to their users in a clear, value-focused format.
+A powerful tool to generate customer-focused release notes from GitHub PRs and JIRA tickets across multiple repositories. Features AI-powered content generation, comprehensive progress tracking, and structured markdown output with table of contents.
 
 ## ✨ Features
 
-- **GitHub Integration**: Fetches PR metadata for any specified month
-- **JIRA Integration**: Automatically extracts and links JIRA tickets from PR descriptions
-- **AI-Powered Generation**: Uses Vercel AI SDK with OpenAI to create customer-focused release notes
-- **Smart Categorization**: Automatically groups changes into New Features, Enhancements, Fixes, and Other Updates
-- **Customer-Focused Output**: Generates user-friendly release notes emphasizing product value and benefits
-- **SaaS-Ready Format**: Perfect structure for customer communication and product marketing
-- **Flexible Configuration**: Works with or without JIRA integration
+- **Multi-Repository Support**: Generate consolidated release notes across multiple repositories
+- **Configuration-Driven**: Use JSON config files to define repositories, categories, and settings
+- **AI-Powered Content**: Transform technical changes into customer-focused release notes
+- **Progress Tracking**: Real-time feedback showing processing progress across all repositories
+- **JIRA Integration**: Automatically link and include JIRA ticket information
+- **Structured Output**: Generate release notes with table of contents, summaries, and statistics
+- **Flexible Categorization**: Customize how changes are categorized per repository
+- **Enhanced Token Limits**: Support for larger models and increased processing capacity
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- Node.js 18+
-- GitHub Personal Access Token
-- OpenAI API Key
-- JIRA credentials (optional)
-
-> **Note**: This tool generates customer-facing release notes designed for SaaS products. It automatically filters out internal changes and focuses on user value and benefits.
-
-### Installation
+### 1. Installation
 
 ```bash
-# Clone or create project
+git clone <repository-url>
+cd release-notes-generator
 npm install
-
-# Copy environment template
-cp env.example .env
-
-# Edit .env with your credentials
 ```
 
-### Configuration
+### 2. Environment Setup
 
-**Easy Setup:**
+Copy the example environment file and configure your credentials:
 
 ```bash
-# Copy the example configuration
 cp env.example .env
-
-# Check your configuration status
-npm start check-config
-
-# Edit .env with your credentials
 ```
 
-**Required Variables:**
+Edit `.env` with your credentials:
 
-```bash
+```env
 # Required
 GITHUB_TOKEN=ghp_your_github_token_here
-OPENAI_API_KEY=sk-your_openai_key_here
+OPENAI_API_KEY=sk-your_openai_api_key_here
 
 # Optional (for JIRA integration)
 JIRA_HOST=your-company.atlassian.net
-JIRA_USERNAME=your_username
-JIRA_PASSWORD=your_api_token
+JIRA_USERNAME=your-email@company.com
+JIRA_PASSWORD=your_jira_token_or_password
 ```
 
-The tool will automatically guide you through configuration if any required variables are missing.
+### 3. Create Configuration
 
-### Usage
-
-Generate release notes for the current month:
+Initialize a configuration file:
 
 ```bash
-npm start generate -r owner/repo-name
+npm start init-config -o my-config.json
 ```
 
-Generate for a specific month:
+Or copy the example:
 
 ```bash
-npm start generate -r owner/repo-name -m 2024-01
+cp config.example.json my-config.json
 ```
 
-Custom output file:
+### 4. Configure Repositories
 
-```bash
-npm start generate -r owner/repo-name -o january-2024-release.md
+Edit `my-config.json` to define your repositories:
+
+```json
+{
+  "releaseConfig": {
+    "month": "2024-01",
+    "outputFile": "release-notes.md",
+    "title": "Platform Release Notes",
+    "description": "Comprehensive updates across all our products",
+    "includeTableOfContents": true,
+    "includeSummary": true
+  },
+  "aiConfig": {
+    "maxTokens": 8000,
+    "batchSize": 3,
+    "model": "gpt-4o"
+  },
+  "repositories": [
+    {
+      "name": "Core API",
+      "repo": "company/core-api",
+      "description": "Backend services and APIs",
+      "priority": 1,
+      "includeInSummary": true,
+      "categories": {
+        "features": "New API Endpoints & Capabilities",
+        "improvements": "Performance & Reliability Updates",
+        "bugs": "Critical Fixes & Stability"
+      }
+    }
+  ]
+}
 ```
 
-Set up JIRA Personal Access Token (recommended for better security):
+### 5. Generate Release Notes
 
 ```bash
-npm start setup-jira-pat
+npm start generate -c my-config.json
 ```
 
-Check your environment configuration:
+## 📋 Configuration Reference
+
+### Release Configuration
+
+```json
+{
+  "releaseConfig": {
+    "month": "2024-01", // Target month (YYYY-MM)
+    "outputFile": "release-notes.md", // Output file path
+    "title": "Release Notes", // Main title
+    "description": "Release description", // Subtitle/description
+    "includeTableOfContents": true, // Generate TOC
+    "includeSummary": true // Include executive summary
+  }
+}
+```
+
+### AI Configuration
+
+```json
+{
+  "aiConfig": {
+    "maxTokens": 8000, // Token limit per request
+    "batchSize": 3, // PRs processed per batch
+    "model": "gpt-4o" // OpenAI model to use
+  }
+}
+```
+
+**Recommended Models:**
+
+- `gpt-4o`: Best quality, higher cost
+- `gpt-4o-mini`: Good balance of quality and cost
+- `gpt-3.5-turbo`: Faster, lower cost
+
+### Repository Configuration
+
+```json
+{
+  "name": "Display Name", // Human-readable name
+  "repo": "owner/repository", // GitHub repository
+  "description": "Repository description", // Optional description
+  "priority": 1, // Display order (lower = first)
+  "includeInSummary": true, // Include in executive summary
+  "categories": {
+    // Custom category titles
+    "features": "New Features",
+    "improvements": "Enhancements",
+    "bugs": "Bug Fixes"
+  }
+}
+```
+
+### JIRA Configuration
+
+```json
+{
+  "jiraConfig": {
+    "enabled": true, // Enable JIRA integration
+    "baseUrl": "https://company.atlassian.net", // Override env var
+    "priorityMapping": {
+      // Priority emoji mapping
+      "Critical": "🔴",
+      "High": "🟠",
+      "Medium": "🟡",
+      "Low": "🟢"
+    }
+  }
+}
+```
+
+## 🔧 Command Line Interface
+
+### Primary Commands
 
 ```bash
+# Generate multi-repo release notes
+npm start generate -c config.json
+
+# Override configuration options
+npm start generate -c config.json -m 2024-02 -o february-notes.md
+
+# Enable verbose logging for debugging
+npm start generate -c config.json --verbose
+```
+
+### Utility Commands
+
+```bash
+# Check environment configuration
 npm start check-config
+
+# Initialize new configuration file
+npm start init-config -o my-config.json
+
+# Set up JIRA Personal Access Token
+npm start setup-jira-pat
+
+# Generate single repository (legacy mode)
+npm start generate-single -r owner/repo -m 2024-01
 ```
 
-## 🔧 Advanced Configuration
+## 📊 Output Structure
 
-### GitHub Token Setup
+The generated release notes include:
 
-1. Go to GitHub Settings → Developer settings → Personal access tokens
-2. Generate a new token with these scopes:
-   - `repo` (for private repos) or `public_repo` (for public repos)
-   - `read:user` (to fetch user information)
+1. **Header**: Title, date, and overview statistics
+2. **Executive Summary**: High-level highlights across all repositories
+3. **Table of Contents**: Navigation links to all sections
+4. **Repository Sections**: Detailed changes organized by repository and category
+5. **Statistics**: Processing metrics and breakdown tables
 
-### JIRA Setup
-
-**🔐 Personal Access Tokens (Recommended)**
-
-For JIRA Server/Data Center (version 8.14+), use Personal Access Tokens for better security:
-
-1. **Automatic Setup**: Run `npm start setup-jira-pat` to create a PAT interactively
-2. **Manual Setup**:
-   - Go to JIRA → Profile → Personal Access Tokens
-   - Create token with desired expiration
-   - Update `.env` with `JIRA_PASSWORD=your_pat_token`
-
-**📋 Alternative Authentication Methods**
-
-1. **JIRA Cloud**: Use your email and API token from Atlassian Account Settings
-2. **JIRA Server (older versions)**: Use your username and password
-3. **Format**: Extract JIRA keys like `PROJ-123` from PR titles/descriptions
-
-**🔧 PAT Benefits** (per [Atlassian documentation](https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html)):
-
-- Enhanced security (no password exposure)
-- Easy revocation if compromised
-- Configurable expiration dates
-- Bearer token authentication
-
-### OpenAI Configuration
-
-The tool uses GPT-4 Turbo for optimal results. Ensure your OpenAI account has sufficient credits and API access.
-
-## 📊 Output Format
-
-The generated markdown includes:
-
-### Executive Summary
-
-- Customer-focused highlights of the release
-- Count of new features, improvements, and fixes
-- Clear value proposition for users
-
-### Categorized Release Notes
-
-- ✨ **New Features & Capabilities**: User-facing feature additions with value explanation
-- 🚀 **Enhancements & Improvements**: Performance and usability improvements
-- 🔧 **Fixes & Stability Improvements**: Problem resolutions that improve user experience
-- 📝 **Additional Updates**: Other customer-relevant changes
-
-### Customer-Focused Benefits
-
-- Emphasizes "what" and "why" from user perspective
-- Uses clear, non-technical language
-- Filters out internal/infrastructure changes
-- Highlights product value and user benefits
-
-## 🛠️ How It Works
-
-1. **Fetch PRs**: Retrieves all merged PRs for the specified month using GitHub API
-2. **Extract JIRA Keys**: Scans PR titles and descriptions for JIRA ticket references (e.g., `PROJ-123`)
-3. **Fetch JIRA Data**: Retrieves detailed ticket information including summary, type, and status
-4. **AI Processing**: Uses GPT-4 to analyze PR and JIRA data, filtering out internal changes and focusing on customer value
-5. **Generate Customer-Focused Output**: Creates polished release notes that emphasize user benefits and product improvements
-6. **Smart Filtering**: Automatically excludes infrastructure changes, build improvements, and other internal-only updates
-
-## 📝 Example Output
+### Example Output Structure
 
 ```markdown
-# Awesome App - January 2024 Release
+# Platform Release Notes - January 2024
 
 **Release Date:** February 1st, 2024
-
----
+**Repositories:** 4
+**Total Changes:** 47 pull requests
 
 ## 🎯 This Month's Highlights
 
-We're excited to share **3** new features and capabilities, **2** enhancements to existing functionality, **4** fixes and stability improvements designed to improve your experience and productivity.
+We're excited to share 12 new features and capabilities, 18 enhancements and optimizations, 8 fixes and stability improvements designed to improve your experience.
 
-## ✨ New Features & Capabilities
+## 📚 Table of Contents
 
-Discover what's new and how it can help you:
+- [🎯 This Month's Highlights](#-this-months-highlights)
+- [📦 Core API](#-core-api)
+  - [✨ New Features](#-new-features)
+  - [🚀 Improvements](#-improvements)
 
-- Enhanced user authentication with seamless single sign-on support for faster, more secure access
-- Added dark mode theme option to reduce eye strain during extended use
-- Introduced data export functionality allowing you to download your information in multiple formats
+## 📦 Core API
 
-## 🚀 Enhancements & Improvements
+Backend services and APIs • **15** pull requests processed • **8** JIRA tickets linked
 
-We've made these improvements based on your feedback:
+### ✨ New API Endpoints & Capabilities
 
-- Streamlined dashboard loading times by 40% for a more responsive experience
-- Improved search functionality with better filtering and instant results
+New functionality and capabilities:
 
-## 🔧 Fixes & Stability Improvements
-
-We've resolved these issues to ensure a smoother experience:
-
-- Fixed login redirects that occasionally failed on mobile devices
-- Resolved intermittent loading issues that could affect data synchronization
-- Corrected display formatting problems on smaller screen sizes
-- Improved system stability during peak usage periods
+- Enhanced user authentication with multi-factor support
+- New GraphQL endpoints for real-time data queries
 ```
 
-## 🔍 Troubleshooting
+## 🔄 Migration from Single-Repo
 
-**GitHub API Rate Limits**: The tool respects rate limits. If you hit limits, wait or use a token with higher limits.
+If you're currently using the single-repository mode:
 
-**JIRA Connection Issues**:
+1. **Create a configuration file**:
 
-- Verify JIRA_HOST doesn't include `https://`
-- Ensure API token has proper permissions
-- Check firewall/VPN restrictions
+   ```bash
+   npm start init-config -o config.json
+   ```
 
-**AI Generation Errors**:
+2. **Update the repositories section** with your current repo:
 
-- Verify OpenAI API key is valid and has credits
-- Check internet connectivity
-- Large PR sets may take longer to process
+   ```json
+   {
+     "repositories": [
+       {
+         "name": "My Project",
+         "repo": "owner/repository",
+         "priority": 1,
+         "includeInSummary": true
+       }
+     ]
+   }
+   ```
 
-**No PRs Found**:
+3. **Switch to the new command**:
 
-- Verify repository name format (`owner/repo`)
-- Check if PRs were merged (not just closed)
-- Ensure target month has merged PRs
+   ```bash
+   # Old way
+   npm start generate-single -r owner/repo
+
+   # New way
+   npm start generate -c config.json
+   ```
+
+The legacy `generate-single` command will continue to work for backward compatibility.
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**"Config file not found"**
+
+- Ensure the config file path is correct
+- Use `npm start init-config` to create a template
+
+**"Repository must be in format owner/repo"**
+
+- Check that all repository entries use the correct format
+- Example: `"microsoft/vscode"`, not `"vscode"` or `"https://github.com/microsoft/vscode"`
+
+**API Rate Limits**
+
+- GitHub: 5,000 requests/hour for authenticated requests
+- OpenAI: Varies by plan and model
+- Consider reducing `batchSize` or adding delays
+
+**JIRA Connection Issues**
+
+- Verify JIRA credentials in `.env`
+- Use `npm start setup-jira-pat` for Personal Access Token setup
+- Check that JIRA_HOST doesn't include `https://`
+
+### Verbose Mode
+
+Enable detailed logging for debugging:
+
+```bash
+npm start generate -c config.json --verbose
+```
+
+This provides:
+
+- Detailed API request/response information
+- Processing progress for each step
+- Token usage statistics
+- Error details and suggestions
+
+## 🔐 Security
+
+- Store credentials in `.env` file (never commit to version control)
+- Use environment variables in production
+- Consider using JIRA Personal Access Tokens instead of passwords
+- Regularly rotate API keys and tokens
+
+## 📈 Performance Tips
+
+- **Optimize batch size**: Smaller batches (2-3) for better error handling, larger (5-8) for speed
+- **Use appropriate models**: `gpt-4o-mini` for most use cases, `gpt-4o` for maximum quality
+- **Adjust token limits**: Higher limits for complex repositories, lower for simple ones
+- **Filter repositories**: Only include repos with significant changes in your config
 
 ## 🤝 Contributing
 
-1. Follow functional programming patterns where reasonable
-2. Keep code dense but readable - meaningful newlines
-3. Comment only exceptional code that needs explanation
-4. Test with different repository types and PR patterns
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## 📄 License
 
-MIT License - feel free to use and modify for your projects.
+MIT License - see LICENSE file for details.

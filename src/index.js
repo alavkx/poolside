@@ -3,7 +3,9 @@
 import { Command } from 'commander';
 import dotenv from 'dotenv';
 import chalk from 'chalk';
-import { generateReleaseNotes } from './release-notes-generator.js';
+import fs from 'fs/promises';
+import path from 'path';
+import { generateMultiRepoReleaseNotes } from './release-notes-generator.js';
 
 dotenv.config();
 
@@ -78,16 +80,107 @@ function validateConfig() {
   }
 }
 
+async function loadConfig(configPath) {
+  try {
+    const configData = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(configData);
+    
+    // Validate required config structure
+    if (!config.repositories || !Array.isArray(config.repositories)) {
+      throw new Error('Config must contain a "repositories" array');
+    }
+    
+    if (config.repositories.length === 0) {
+      throw new Error('At least one repository must be configured');
+    }
+    
+    // Validate each repository config
+    config.repositories.forEach((repo, index) => {
+      if (!repo.name || !repo.repo) {
+        throw new Error(`Repository at index ${index} missing required fields: name, repo`);
+      }
+      
+      if (!repo.repo.includes('/')) {
+        throw new Error(`Repository "${repo.repo}" must be in format "owner/repo"`);
+      }
+    });
+    
+    // Set defaults
+    config.releaseConfig = {
+      includeTableOfContents: true,
+      includeSummary: true,
+      ...config.releaseConfig
+    };
+    
+    config.aiConfig = {
+      maxTokens: 8000,
+      batchSize: 3,
+      model: 'gpt-4o',
+      ...config.aiConfig
+    };
+    
+    return config;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`Config file not found: ${configPath}. Create one using config.example.json as a template.`);
+    }
+    throw new Error(`Failed to load config: ${error.message}`);
+  }
+}
+
 const program = new Command();
 
 program
   .name('release-notes')
-  .description('Generate release notes from GitHub PRs and JIRA tickets')
+  .description('Generate multi-repository release notes from GitHub PRs and JIRA tickets')
   .version('1.0.0');
 
 program
   .command('generate')
-  .description('Generate release notes for the current month')
+  .description('Generate release notes for multiple repositories')
+  .requiredOption('-c, --config <file>', 'Configuration file path (JSON)')
+  .option('-m, --month <month>', 'Override month from config (YYYY-MM)')
+  .option('-o, --output <file>', 'Override output file from config')
+  .option('--verbose', 'Enable verbose logging for debugging')
+  .action(async (options) => {
+    try {
+      validateConfig();
+      
+      console.log(chalk.blue('🚀 Starting multi-repository release notes generation...'));
+      console.log(chalk.gray(`Config file: ${options.config}`));
+      
+      const config = await loadConfig(options.config);
+      
+      // Override config with CLI options if provided
+      if (options.month) {
+        config.releaseConfig.month = options.month;
+      }
+      if (options.output) {
+        config.releaseConfig.outputFile = options.output;
+      }
+      
+      console.log(chalk.blue(`\n📊 Configuration loaded successfully:`));
+      console.log(chalk.gray(`   • Repositories: ${config.repositories.length}`));
+      console.log(chalk.gray(`   • Target month: ${config.releaseConfig.month || getCurrentMonth()}`));
+      console.log(chalk.gray(`   • Output file: ${config.releaseConfig.outputFile || 'release-notes.md'}`));
+      console.log(chalk.gray(`   • AI Model: ${config.aiConfig.model}`));
+      
+      await generateMultiRepoReleaseNotes({
+        ...config,
+        verbose: options.verbose
+      });
+      
+      console.log(chalk.green('\n✅ Multi-repository release notes generated successfully!'));
+    } catch (error) {
+      console.error(chalk.red('❌ Error generating release notes:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Legacy single-repo command for backward compatibility
+program
+  .command('generate-single')
+  .description('Generate release notes for a single repository (legacy)')
   .requiredOption('-r, --repo <repo>', 'GitHub repository (owner/repo)')
   .option('-m, --month <month>', 'Month to generate for (YYYY-MM)', getCurrentMonth())
   .option('-o, --output <file>', 'Output file', 'release-notes.md')
@@ -97,16 +190,42 @@ program
     try {
       validateConfig();
       
+      console.log(chalk.yellow('⚠️  Using legacy single-repo mode. Consider switching to config-driven multi-repo mode.'));
       console.log(chalk.blue('🚀 Starting release notes generation...'));
       console.log(chalk.gray(`Repository: ${options.repo}`));
       console.log(chalk.gray(`Month: ${options.month}`));
       console.log(chalk.gray(`Output: ${options.output}`));
       
-      await generateReleaseNotes({
-        repo: options.repo,
-        month: options.month,
-        outputFile: options.output,
-        jiraBaseUrl: options.jiraBaseUrl,
+      // Create a minimal config for backward compatibility
+      const legacyConfig = {
+        releaseConfig: {
+          month: options.month,
+          outputFile: options.output,
+          title: 'Release Notes',
+          description: 'Generated release notes',
+          includeTableOfContents: false,
+          includeSummary: true
+        },
+        aiConfig: {
+          maxTokens: 4000,
+          batchSize: 5,
+          model: 'gpt-4o-mini'
+        },
+        repositories: [{
+          name: options.repo.split('/')[1],
+          repo: options.repo,
+          description: '',
+          priority: 1,
+          includeInSummary: true
+        }],
+        jiraConfig: {
+          enabled: true,
+          baseUrl: options.jiraBaseUrl
+        }
+      };
+      
+      await generateMultiRepoReleaseNotes({
+        ...legacyConfig,
         verbose: options.verbose
       });
       
@@ -147,6 +266,59 @@ program
       
     } catch (error) {
       console.error(chalk.red('❌ Error setting up JIRA PAT:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('init-config')
+  .description('Initialize a new configuration file')
+  .option('-o, --output <file>', 'Output config file path', 'config.json')
+  .action(async (options) => {
+    try {
+      const examplePath = path.join(process.cwd(), 'config.example.json');
+      
+      try {
+        await fs.access(examplePath);
+        await fs.copyFile(examplePath, options.output);
+        console.log(chalk.green(`✅ Configuration template created: ${options.output}`));
+        console.log(chalk.yellow('📝 Edit the configuration file to match your repositories and requirements.'));
+      } catch {
+        // If example doesn't exist, create a minimal config
+        const minimalConfig = {
+          releaseConfig: {
+            month: getCurrentMonth(),
+            outputFile: "release-notes.md",
+            title: "Release Notes",
+            description: "Generated release notes",
+            includeTableOfContents: true,
+            includeSummary: true
+          },
+          aiConfig: {
+            maxTokens: 8000,
+            batchSize: 3,
+            model: "gpt-4o"
+          },
+          repositories: [
+            {
+              name: "Example Repo",
+              repo: "owner/repository",
+              description: "Description of the repository",
+              priority: 1,
+              includeInSummary: true
+            }
+          ],
+          jiraConfig: {
+            enabled: true
+          }
+        };
+        
+        await fs.writeFile(options.output, JSON.stringify(minimalConfig, null, 2));
+        console.log(chalk.green(`✅ Basic configuration created: ${options.output}`));
+        console.log(chalk.yellow('📝 Update the configuration with your actual repository details.'));
+      }
+    } catch (error) {
+      console.error(chalk.red('❌ Error creating config file:'), error.message);
       process.exit(1);
     }
   });

@@ -4,91 +4,239 @@ import { JiraClient } from './jira-client.js';
 import { AIProcessor } from './ai-processor.js';
 import { MarkdownGenerator } from './markdown-generator.js';
 import chalk from 'chalk';
+import ora from 'ora';
 
-export async function generateReleaseNotes(options) {
-  const { repo, month, outputFile, jiraBaseUrl, verbose } = options;
+export async function generateMultiRepoReleaseNotes(config) {
+  const { 
+    releaseConfig, 
+    aiConfig, 
+    repositories, 
+    jiraConfig, 
+    verbose = false 
+  } = config;
   
-  // Parse repository owner/name
-  const [owner, repoName] = repo.split('/');
-  if (!owner || !repoName) {
-    throw new Error('Repository must be in format "owner/repo"');
-  }
+  const targetMonth = releaseConfig.month || getCurrentMonth();
+  const outputFile = releaseConfig.outputFile || 'release-notes.md';
   
-  console.log(chalk.blue(`\n📊 Processing repository: ${repo}`));
-  console.log(chalk.blue(`📅 Target month: ${month}`));
+  console.log(chalk.blue(`\n🎯 Multi-Repository Release Notes Generation`));
+  console.log(chalk.blue(`══════════════════════════════════════════════`));
+  console.log(chalk.gray(`Target Month: ${targetMonth}`));
+  console.log(chalk.gray(`Output File: ${outputFile}`));
+  console.log(chalk.gray(`Repositories: ${repositories.length}`));
+  console.log(chalk.gray(`AI Model: ${aiConfig.model}`));
   
-  // Initialize clients
-  const githubClient = new GitHubClient(process.env.GITHUB_TOKEN);
-  const jiraClient = await createJiraClient(jiraBaseUrl);
-  const aiProcessor = new AIProcessor(process.env.OPENAI_API_KEY, verbose);
-  const markdownGenerator = new MarkdownGenerator();
+  const overallSpinner = ora('Initializing multi-repo processing...').start();
   
   try {
-    // Step 1: Fetch GitHub PRs for the month
-    console.log(chalk.cyan('\n🔍 Fetching GitHub PR metadata...'));
-    const prData = await githubClient.getPRsForMonth(owner, repoName, month);
+    // Initialize clients
+    const githubClient = new GitHubClient(process.env.GITHUB_TOKEN);
+    const jiraClient = await createJiraClient(jiraConfig, verbose);
+    const aiProcessor = new AIProcessor(process.env.OPENAI_API_KEY, verbose, aiConfig);
+    const markdownGenerator = new MarkdownGenerator();
     
-    if (prData.length === 0) {
-      console.log(chalk.yellow('⚠️  No PRs found for the specified month'));
-      return;
+    overallSpinner.succeed('Clients initialized successfully');
+    
+    // Sort repositories by priority
+    const sortedRepos = [...repositories].sort((a, b) => (a.priority || 999) - (b.priority || 999));
+    
+    const allRepoData = [];
+    let totalPRs = 0;
+    let totalJiraTickets = 0;
+    
+    // Process each repository
+    console.log(chalk.cyan(`\n📦 Processing ${sortedRepos.length} repositories...`));
+    
+    for (let i = 0; i < sortedRepos.length; i++) {
+      const repo = sortedRepos[i];
+      const progress = `[${i + 1}/${sortedRepos.length}]`;
+      
+      console.log(chalk.blue(`\n${progress} ${repo.name} (${repo.repo})`));
+      console.log(chalk.gray(`    Priority: ${repo.priority || 'unset'} | Include in summary: ${repo.includeInSummary ? 'yes' : 'no'}`));
+      
+      try {
+        const repoData = await processRepository({
+          repo,
+          targetMonth,
+          githubClient,
+          jiraClient,
+          aiProcessor,
+          verbose,
+          progress
+        });
+        
+        allRepoData.push(repoData);
+        totalPRs += repoData.prData.length;
+        totalJiraTickets += repoData.jiraTickets.length;
+        
+        console.log(chalk.green(`    ✅ Completed: ${repoData.prData.length} PRs, ${repoData.jiraTickets.length} JIRA tickets`));
+        
+      } catch (error) {
+        console.log(chalk.red(`    ❌ Failed: ${error.message}`));
+        
+        // Add empty data to maintain structure but mark as failed
+        allRepoData.push({
+          repoConfig: repo,
+          prData: [],
+          jiraTickets: [],
+          releaseNotesData: {},
+          error: error.message
+        });
+      }
     }
     
-    // Step 2: Extract JIRA keys and fetch JIRA ticket metadata
-    console.log(chalk.cyan('\n🎫 Extracting JIRA tickets...'));
-    const allJiraKeys = new Set();
+    console.log(chalk.cyan(`\n📊 Processing Summary:`));
+    console.log(chalk.gray(`   • Total PRs: ${totalPRs}`));
+    console.log(chalk.gray(`   • Total JIRA tickets: ${totalJiraTickets}`));
+    console.log(chalk.gray(`   • Successful repos: ${allRepoData.filter(r => !r.error).length}/${allRepoData.length}`));
     
-    prData.forEach(pr => {
-      const jiraKeys = githubClient.extractJiraKeys(pr);
-      jiraKeys.forEach(key => allJiraKeys.add(key));
+    // Generate consolidated markdown
+    console.log(chalk.cyan(`\n📝 Generating consolidated release notes...`));
+    const consolidatedSpinner = ora('Creating markdown output...').start();
+    
+    const markdown = markdownGenerator.generateMultiRepoMarkdown({
+      releaseConfig,
+      targetMonth,
+      allRepoData,
+      totalStats: {
+        totalPRs,
+        totalJiraTickets,
+        successfulRepos: allRepoData.filter(r => !r.error).length,
+        totalRepos: allRepoData.length
+      }
     });
     
-    const jiraTickets = jiraClient 
-      ? await jiraClient.getTicketsMetadata([...allJiraKeys])
-      : [];
+    consolidatedSpinner.succeed('Markdown generated successfully');
     
-    if (jiraTickets.length > 0) {
-      console.log(chalk.green(`✅ Found ${jiraTickets.length} JIRA tickets`));
-    } else {
-      console.log(chalk.yellow('⚠️  No JIRA tickets found or JIRA not configured'));
-    }
-    
-    // Step 3: Process with AI to generate release notes
-    console.log(chalk.cyan('\n🤖 Processing with AI...'));
-    const releaseNotesData = await aiProcessor.generateReleaseNotes(prData, jiraTickets, month);
-    
-    // Step 4: Generate markdown output
-    console.log(chalk.cyan('\n📝 Generating markdown...'));
-    const markdown = markdownGenerator.generateMarkdown({
-      month,
-      repo,
-      releaseNotesData,
-      prData,
-      jiraTickets
-    });
-    
-    // Step 5: Write to file
+    // Write to file
+    const writeSpinner = ora(`Writing to ${outputFile}...`).start();
     await fs.writeFile(outputFile, markdown, 'utf8');
+    writeSpinner.succeed(`Release notes saved to ${outputFile}`);
     
-    console.log(chalk.green(`\n✅ Release notes saved to: ${outputFile}`));
-    console.log(chalk.blue(`📊 Summary:`));
-    console.log(chalk.blue(`   • ${prData.length} PRs processed`));
-    console.log(chalk.blue(`   • ${jiraTickets.length} JIRA tickets linked`));
-    console.log(chalk.blue(`   • ${Object.values(releaseNotesData).flat().length} release note entries generated`));
+    // Show final summary
+    console.log(chalk.green(`\n🎉 Multi-Repository Release Notes Complete!`));
+    console.log(chalk.green(`══════════════════════════════════════════════`));
+    console.log(chalk.blue(`📁 Output: ${outputFile}`));
+    console.log(chalk.blue(`📈 Statistics:`));
+    console.log(chalk.blue(`   • Repositories processed: ${allRepoData.length}`));
+    console.log(chalk.blue(`   • Total pull requests: ${totalPRs}`));
+    console.log(chalk.blue(`   • Total JIRA tickets: ${totalJiraTickets}`));
+    console.log(chalk.blue(`   • AI-generated entries: ${allRepoData.reduce((sum, repo) => sum + Object.values(repo.releaseNotesData || {}).flat().length, 0)}`));
+    
+    const failedRepos = allRepoData.filter(r => r.error);
+    if (failedRepos.length > 0) {
+      console.log(chalk.yellow(`\n⚠️  ${failedRepos.length} repositories had issues:`));
+      failedRepos.forEach(repo => {
+        console.log(chalk.yellow(`   • ${repo.repoConfig.name}: ${repo.error}`));
+      });
+    }
     
   } catch (error) {
-    console.error(chalk.red('\n❌ Error during processing:'));
+    overallSpinner.fail('Multi-repo processing failed');
+    console.error(chalk.red('\n❌ Critical error during processing:'));
     console.error(chalk.red(error.message));
     
-    if (error.message.includes('API rate limit')) {
-      console.log(chalk.yellow('\n💡 Tip: You may have hit API rate limits. Try again later or increase your API limits.'));
+    if (verbose) {
+      console.error(chalk.red('\nStack trace:'));
+      console.error(chalk.red(error.stack));
     }
     
     throw error;
   }
 }
 
-async function createJiraClient(jiraBaseUrl) {
-  const jiraHost = jiraBaseUrl || process.env.JIRA_HOST;
+async function processRepository({ 
+  repo, 
+  targetMonth, 
+  githubClient, 
+  jiraClient, 
+  aiProcessor, 
+  verbose, 
+  progress 
+}) {
+  const [owner, repoName] = repo.repo.split('/');
+  if (!owner || !repoName) {
+    throw new Error(`Repository must be in format "owner/repo", got: ${repo.repo}`);
+  }
+  
+  // Step 1: Fetch GitHub PRs
+  const prSpinner = ora(`${progress} Fetching GitHub PRs...`).start();
+  let prData = [];
+  
+  try {
+    prData = await githubClient.getPRsForMonth(owner, repoName, targetMonth);
+    
+    if (prData.length === 0) {
+      prSpinner.info(`${progress} No PRs found for ${targetMonth}`);
+    } else {
+      prSpinner.succeed(`${progress} Found ${prData.length} PRs`);
+    }
+  } catch (error) {
+    prSpinner.fail(`${progress} Failed to fetch PRs: ${error.message}`);
+    throw new Error(`GitHub API error: ${error.message}`);
+  }
+  
+  // Step 2: Extract and fetch JIRA tickets
+  const jiraSpinner = ora(`${progress} Processing JIRA tickets...`).start();
+  let jiraTickets = [];
+  
+  try {
+    if (jiraClient && prData.length > 0) {
+      const allJiraKeys = new Set();
+      
+      prData.forEach(pr => {
+        const jiraKeys = githubClient.extractJiraKeys(pr);
+        jiraKeys.forEach(key => allJiraKeys.add(key));
+      });
+      
+      if (allJiraKeys.size > 0) {
+        jiraTickets = await jiraClient.getTicketsMetadata([...allJiraKeys]);
+        jiraSpinner.succeed(`${progress} Found ${jiraTickets.length}/${allJiraKeys.size} JIRA tickets`);
+      } else {
+        jiraSpinner.info(`${progress} No JIRA keys found in PRs`);
+      }
+    } else {
+      jiraSpinner.info(`${progress} JIRA processing skipped`);
+    }
+  } catch (error) {
+    jiraSpinner.warn(`${progress} JIRA processing failed: ${error.message}`);
+    // Continue without JIRA data
+  }
+  
+  // Step 3: AI Processing
+  const aiSpinner = ora(`${progress} Processing with AI...`).start();
+  let releaseNotesData = {};
+  
+  try {
+    if (prData.length > 0) {
+      releaseNotesData = await aiProcessor.generateReleaseNotes(prData, jiraTickets, targetMonth, repo);
+      
+      const totalEntries = Object.values(releaseNotesData).flat().length;
+      aiSpinner.succeed(`${progress} Generated ${totalEntries} release note entries`);
+    } else {
+      aiSpinner.info(`${progress} No PRs to process with AI`);
+    }
+  } catch (error) {
+    aiSpinner.fail(`${progress} AI processing failed: ${error.message}`);
+    throw new Error(`AI processing error: ${error.message}`);
+  }
+  
+  return {
+    repoConfig: repo,
+    prData,
+    jiraTickets,
+    releaseNotesData
+  };
+}
+
+async function createJiraClient(jiraConfig, verbose) {
+  if (!jiraConfig?.enabled) {
+    if (verbose) {
+      console.log(chalk.gray('🎫 JIRA integration disabled by configuration'));
+    }
+    return null;
+  }
+  
+  const jiraHost = jiraConfig.baseUrl || process.env.JIRA_HOST;
   const jiraUsername = process.env.JIRA_USERNAME;
   const jiraPassword = process.env.JIRA_PASSWORD;
   
@@ -105,11 +253,15 @@ async function createJiraClient(jiraBaseUrl) {
       password: jiraPassword
     });
     
-    // Test connection and offer PAT setup if needed
+    // Test connection
     const connectionWorks = await jiraClient.testConnection();
     if (!connectionWorks) {
       console.log(chalk.yellow('⚠️  JIRA connection test failed. Continuing without JIRA integration.'));
       return null;
+    }
+    
+    if (verbose) {
+      console.log(chalk.green('✅ JIRA client initialized and tested successfully'));
     }
     
     return jiraClient;
@@ -118,4 +270,45 @@ async function createJiraClient(jiraBaseUrl) {
     console.log(chalk.gray(`   Error: ${error.message}`));
     return null;
   }
+}
+
+// Legacy single-repo function for backward compatibility
+export async function generateReleaseNotes(options) {
+  const { repo, month, outputFile, jiraBaseUrl, verbose } = options;
+  
+  // Convert to new multi-repo format
+  const config = {
+    releaseConfig: {
+      month,
+      outputFile,
+      title: 'Release Notes',
+      description: 'Generated release notes',
+      includeTableOfContents: false,
+      includeSummary: true
+    },
+    aiConfig: {
+      maxTokens: 4000,
+      batchSize: 5,
+      model: 'gpt-4o-mini'
+    },
+    repositories: [{
+      name: repo.split('/')[1],
+      repo: repo,
+      description: '',
+      priority: 1,
+      includeInSummary: true
+    }],
+    jiraConfig: {
+      enabled: true,
+      baseUrl: jiraBaseUrl
+    },
+    verbose
+  };
+  
+  return generateMultiRepoReleaseNotes(config);
+}
+
+function getCurrentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 } 

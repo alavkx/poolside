@@ -1,0 +1,74 @@
+{
+  "releaseConfig": {
+    "month": "2025-06",
+    "outputFile": "release-notes.md",
+    "title": "Multi-Repository Release Notes",
+    "description": "Comprehensive release notes across all repositories",
+    "includeTableOfContents": true,
+    "includeSummary": true
+  },
+  "aiConfig": {
+    "maxTokens": 8000,
+    "batchSize": 3,
+    "model": "gpt-4o"
+  },
+  "repositories": [
+    {
+      "name": "Core API",
+      "repo": "company/core-api",
+      "description": "Core backend services and APIs",
+      "priority": 1,
+      "includeInSummary": true,
+      "categories": {
+        "features": "New API Endpoints & Capabilities",
+        "improvements": "Performance & Reliability Improvements", 
+        "bugs": "Critical Fixes & Stability"
+      }
+    },
+    {
+      "name": "Frontend Dashboard",
+      "repo": "company/dashboard-ui",
+      "description": "User interface and dashboard components",
+      "priority": 2,
+      "includeInSummary": true,
+      "categories": {
+        "features": "New UI Features & Components",
+        "improvements": "UX & Performance Enhancements",
+        "bugs": "UI Fixes & Accessibility"
+      }
+    },
+    {
+      "name": "Mobile App",
+      "repo": "company/mobile-app",
+      "description": "iOS and Android mobile applications",
+      "priority": 3,
+      "includeInSummary": true,
+      "categories": {
+        "features": "New Mobile Features",
+        "improvements": "Mobile Performance & UX",
+        "bugs": "Mobile Bug Fixes"
+      }
+    },
+    {
+      "name": "Documentation",
+      "repo": "company/docs",
+      "description": "Technical documentation and guides",
+      "priority": 4,
+      "includeInSummary": false,
+      "categories": {
+        "features": "New Documentation",
+        "improvements": "Documentation Updates",
+        "bugs": "Documentation Fixes"
+      }
+    }
+  ],
+  "jiraConfig": {
+    "enabled": true,
+    "priorityMapping": {
+      "Critical": "🔴",
+      "High": "🟠", 
+      "Medium": "🟡",
+      "Low": "🟢"
+    }
+  }
+} 
