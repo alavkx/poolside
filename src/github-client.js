@@ -5,7 +5,7 @@ import ora from 'ora';
 export class GitHubClient {
   constructor(token) {
     if (!token) {
-      throw new Error('GitHub token is required. Set GITHUB_TOKEN environment variable.');
+      throw new Error('GitHub token is required. Run "npm start check-config" to verify your configuration.');
     }
     this.octokit = new Octokit({ auth: token });
   }

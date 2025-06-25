@@ -5,7 +5,7 @@ import ora from 'ora';
 export class AIProcessor {
   constructor(apiKey) {
     if (!apiKey) {
-      throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable.');
+      throw new Error('OpenAI API key is required. Run "npm start check-config" to verify your configuration.');
     }
     this.model = openai('gpt-4-turbo');
   }

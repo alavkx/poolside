@@ -34,7 +34,19 @@ cp env.example .env
 
 ### Configuration
 
-Edit your `.env` file with the required credentials:
+**Easy Setup:**
+
+```bash
+# Copy the example configuration
+cp env.example .env
+
+# Check your configuration status
+npm start check-config
+
+# Edit .env with your credentials
+```
+
+**Required Variables:**
 
 ```bash
 # Required
@@ -46,6 +58,8 @@ JIRA_HOST=your-company.atlassian.net
 JIRA_USERNAME=your_username
 JIRA_PASSWORD=your_api_token
 ```
+
+The tool will automatically guide you through configuration if any required variables are missing.
 
 ### Usage
 
@@ -71,6 +85,12 @@ Set up JIRA Personal Access Token (recommended for better security):
 
 ```bash
 npm start setup-jira-pat
+```
+
+Check your environment configuration:
+
+```bash
+npm start check-config
 ```
 
 ## 🔧 Advanced Configuration
