@@ -92,6 +92,7 @@ program
   .option('-m, --month <month>', 'Month to generate for (YYYY-MM)', getCurrentMonth())
   .option('-o, --output <file>', 'Output file', 'release-notes.md')
   .option('--jira-base-url <url>', 'JIRA base URL (overrides env var)')
+  .option('--verbose', 'Enable verbose logging for debugging')
   .action(async (options) => {
     try {
       validateConfig();
@@ -105,7 +106,8 @@ program
         repo: options.repo,
         month: options.month,
         outputFile: options.output,
-        jiraBaseUrl: options.jiraBaseUrl
+        jiraBaseUrl: options.jiraBaseUrl,
+        verbose: options.verbose
       });
       
       console.log(chalk.green('✅ Release notes generated successfully!'));

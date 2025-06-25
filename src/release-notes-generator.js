@@ -6,7 +6,7 @@ import { MarkdownGenerator } from './markdown-generator.js';
 import chalk from 'chalk';
 
 export async function generateReleaseNotes(options) {
-  const { repo, month, outputFile, jiraBaseUrl } = options;
+  const { repo, month, outputFile, jiraBaseUrl, verbose } = options;
   
   // Parse repository owner/name
   const [owner, repoName] = repo.split('/');
@@ -20,7 +20,7 @@ export async function generateReleaseNotes(options) {
   // Initialize clients
   const githubClient = new GitHubClient(process.env.GITHUB_TOKEN);
   const jiraClient = await createJiraClient(jiraBaseUrl);
-  const aiProcessor = new AIProcessor(process.env.OPENAI_API_KEY);
+  const aiProcessor = new AIProcessor(process.env.OPENAI_API_KEY, verbose);
   const markdownGenerator = new MarkdownGenerator();
   
   try {
