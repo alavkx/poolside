@@ -1,14 +1,15 @@
 # Release Notes Generator
 
-An intelligent tool that automatically generates release notes by analyzing GitHub pull requests and associated JIRA tickets using AI. Perfect for monthly release cycles and maintaining clear project documentation.
+An intelligent tool that automatically generates customer-facing release notes by analyzing GitHub pull requests and associated JIRA tickets using AI. Perfect for SaaS products that need to communicate monthly releases and feature updates to their users in a clear, value-focused format.
 
 ## ✨ Features
 
 - **GitHub Integration**: Fetches PR metadata for any specified month
 - **JIRA Integration**: Automatically extracts and links JIRA tickets from PR descriptions
-- **AI-Powered Generation**: Uses Vercel AI SDK with OpenAI to create human-readable release notes
-- **Smart Categorization**: Automatically groups changes into Features, Bug Fixes, Improvements, and Other
-- **Comprehensive Output**: Generates detailed markdown with statistics, contributor info, and references
+- **AI-Powered Generation**: Uses Vercel AI SDK with OpenAI to create customer-focused release notes
+- **Smart Categorization**: Automatically groups changes into New Features, Enhancements, Fixes, and Other Updates
+- **Customer-Focused Output**: Generates user-friendly release notes emphasizing product value and benefits
+- **SaaS-Ready Format**: Perfect structure for customer communication and product marketing
 - **Flexible Configuration**: Works with or without JIRA integration
 
 ## 🚀 Quick Start
@@ -19,6 +20,8 @@ An intelligent tool that automatically generates release notes by analyzing GitH
 - GitHub Personal Access Token
 - OpenAI API Key
 - JIRA credentials (optional)
+
+> **Note**: This tool generates customer-facing release notes designed for SaaS products. It automatically filters out internal changes and focuses on user value and benefits.
 
 ### Installation
 
@@ -135,61 +138,71 @@ The tool uses GPT-4 Turbo for optimal results. Ensure your OpenAI account has su
 
 The generated markdown includes:
 
-### Summary Section
+### Executive Summary
 
-- Total PRs, contributors, and code statistics
-- Top contributors list
-- JIRA tickets linked count
+- Customer-focused highlights of the release
+- Count of new features, improvements, and fixes
+- Clear value proposition for users
 
 ### Categorized Release Notes
 
-- ✨ **New Features**: User-facing feature additions
-- 🔧 **Improvements**: Enhancements and optimizations
-- 🐛 **Bug Fixes**: Problem resolutions
-- 📝 **Other Changes**: Miscellaneous updates
+- ✨ **New Features & Capabilities**: User-facing feature additions with value explanation
+- 🚀 **Enhancements & Improvements**: Performance and usability improvements
+- 🔧 **Fixes & Stability Improvements**: Problem resolutions that improve user experience
+- 📝 **Additional Updates**: Other customer-relevant changes
 
-### Detailed Reference
+### Customer-Focused Benefits
 
-- Complete PR list with links and descriptions
-- JIRA tickets reference (when available)
-- Contributor and change statistics
+- Emphasizes "what" and "why" from user perspective
+- Uses clear, non-technical language
+- Filters out internal/infrastructure changes
+- Highlights product value and user benefits
 
 ## 🛠️ How It Works
 
 1. **Fetch PRs**: Retrieves all merged PRs for the specified month using GitHub API
 2. **Extract JIRA Keys**: Scans PR titles and descriptions for JIRA ticket references (e.g., `PROJ-123`)
 3. **Fetch JIRA Data**: Retrieves detailed ticket information including summary, type, and status
-4. **AI Processing**: Uses GPT-4 to analyze PR and JIRA data, generating user-friendly release notes
-5. **Generate Markdown**: Creates a comprehensive markdown document with all information
+4. **AI Processing**: Uses GPT-4 to analyze PR and JIRA data, filtering out internal changes and focusing on customer value
+5. **Generate Customer-Focused Output**: Creates polished release notes that emphasize user benefits and product improvements
+6. **Smart Filtering**: Automatically excludes infrastructure changes, build improvements, and other internal-only updates
 
 ## 📝 Example Output
 
 ```markdown
-# Release Notes - January 2024
+# Awesome App - January 2024 Release
 
-**Repository:** myorg/awesome-app  
-**Generated on:** February 1st, 2024
+**Release Date:** February 1st, 2024
 
-## 📊 Summary
+---
 
-This release includes **23 pull requests** merged during this period.
+## 🎯 This Month's Highlights
 
-### Statistics
+We're excited to share **3** new features and capabilities, **2** enhancements to existing functionality, **4** fixes and stability improvements designed to improve your experience and productivity.
 
-- **Total PRs:** 23
-- **Contributors:** 8
-- **JIRA tickets linked:** 15
+## ✨ New Features & Capabilities
 
-## ✨ New Features
+Discover what's new and how it can help you:
 
-- Added user authentication with OAuth2 support
-- Implemented dark mode toggle functionality
-- Added export functionality for user data
+- Enhanced user authentication with seamless single sign-on support for faster, more secure access
+- Added dark mode theme option to reduce eye strain during extended use
+- Introduced data export functionality allowing you to download your information in multiple formats
 
-## 🐛 Bug Fixes
+## 🚀 Enhancements & Improvements
 
-- Fixed memory leak in data processing pipeline
-- Resolved login redirect issues on mobile devices
+We've made these improvements based on your feedback:
+
+- Streamlined dashboard loading times by 40% for a more responsive experience
+- Improved search functionality with better filtering and instant results
+
+## 🔧 Fixes & Stability Improvements
+
+We've resolved these issues to ensure a smoother experience:
+
+- Fixed login redirects that occasionally failed on mobile devices
+- Resolved intermittent loading issues that could affect data synchronization
+- Corrected display formatting problems on smaller screen sizes
+- Improved system stability during peak usage periods
 ```
 
 ## 🔍 Troubleshooting

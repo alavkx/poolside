@@ -144,13 +144,18 @@ export class AIProcessor {
     
     const allText = [title, ...labels, ...jiraTypes].join(' ');
     
-    if (allText.includes('feature') || allText.includes('new') || allText.includes('story')) {
+    // More sophisticated categorization for customer-focused releases
+    if (allText.includes('feature') || allText.includes('new') || allText.includes('story') || 
+        allText.includes('add') || allText.includes('implement') || allText.includes('create')) {
       return 'features';
     }
-    if (allText.includes('bug') || allText.includes('fix') || allText.includes('hotfix')) {
+    if (allText.includes('bug') || allText.includes('fix') || allText.includes('hotfix') || 
+        allText.includes('resolve') || allText.includes('error') || allText.includes('issue')) {
       return 'bugs';
     }
-    if (allText.includes('improvement') || allText.includes('enhance') || allText.includes('refactor')) {
+    if (allText.includes('improvement') || allText.includes('enhance') || allText.includes('refactor') || 
+        allText.includes('optimize') || allText.includes('performance') || allText.includes('update') ||
+        allText.includes('upgrade') || allText.includes('better')) {
       return 'improvements';
     }
     
@@ -316,34 +321,42 @@ export class AIProcessor {
   buildPrompt(prBatch, category) {
     const prDescriptions = prBatch.map(pr => {
       const jiraContext = pr.relatedTickets.length > 0 
-        ? `\nRelated JIRA tickets: ${pr.relatedTickets.map(t => `${t.key}: ${t.summary}`).join(', ')}`
+        ? `\nRelated tickets: ${pr.relatedTickets.map(t => `${t.key}: ${t.summary}`).join(', ')}`
         : '';
       
-      return `PR #${pr.number}: ${pr.title}
-${pr.body.substring(0, 200)}${pr.body.length > 200 ? '...' : ''}${jiraContext}
-Author: ${pr.author}
+      return `Change: ${pr.title}
+${pr.body.substring(0, 300)}${pr.body.length > 300 ? '...' : ''}${jiraContext}
 Labels: ${pr.labels.join(', ')}`;
     }).join('\n\n');
 
-    const prompt = `You are generating release notes for a software project. Convert the following pull requests into concise, user-friendly release note entries.
+    const categoryContext = {
+      features: "new functionality and capabilities",
+      improvements: "enhancements and optimizations", 
+      bugs: "fixes and stability improvements",
+      other: "general updates"
+    };
 
-Category: ${category}
+    const prompt = `You are writing customer-facing release notes for a SaaS product. Transform the following development changes into customer-focused release note entries that highlight the value and benefits to users.
 
-Guidelines:
-- Focus on user-facing changes and benefits
-- Use clear, non-technical language where possible
-- Combine related changes into single entries when appropriate
-- Start each entry with an action verb (Added, Fixed, Improved, etc.)
-- Keep entries concise but informative
-- Include relevant context from JIRA tickets when available
+Category: ${categoryContext[category] || category}
 
-Pull Requests:
+CRITICAL GUIDELINES:
+- Write for customers/end-users, NOT developers
+- Focus on user benefits and product value
+- Use simple, clear language that non-technical users understand
+- EXCLUDE purely internal/infrastructure changes (CI/CD, build scripts, internal refactoring, developer tooling, etc.)
+- EXCLUDE changes that don't provide direct user value
+- Combine similar changes into single, coherent entries
+- Start with action verbs that show value: "Enhanced", "Streamlined", "Added", "Improved", "Fixed"
+- Explain the "what" and "why" from a user perspective
+- If a change has no customer-facing impact, do not include it
+
+Development Changes:
 ${prDescriptions}
 
-Generate release note entries in the following format:
-- [Entry description]
-- [Entry description]
-- [Entry description]
+Generate customer-focused release note entries. Only include changes that provide direct value to users. Format as:
+- [Customer-focused description highlighting user benefit]
+- [Another entry focusing on user value]
 
 Release note entries:`;
 
