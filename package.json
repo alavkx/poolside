@@ -1,7 +1,7 @@
 {
-  "name": "release-notes-generator",
-  "version": "1.0.0",
-  "description": "Tool to generate release notes from GitHub PRs and JIRA tickets",
+  "name": "agent-workflow-cli",
+  "version": "2.0.0",
+  "description": "CLI tool for automating workflows with productivity tools like JIRA and GitHub - designed for agents",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "test": "echo 'No tests yet'"
   },
   "bin": {
-    "release-notes": "./src/index.js"
+    "agent-workflow": "./src/index.js"
   },
   "dependencies": {
     "@octokit/rest": "^20.0.2",
@@ -31,11 +31,14 @@
     "@types/node": "^20.11.0"
   },
   "keywords": [
-    "release-notes",
+    "workflow",
+    "automation",
     "github",
     "jira",
     "ai",
-    "automation"
+    "cli",
+    "agent",
+    "productivity"
   ],
   "author": "",
   "license": "MIT"
