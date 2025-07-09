@@ -16,6 +16,9 @@ release-notes.md
 *release-notes*.md
 *.log
 
+# TypeScript build output
+dist/
+
 # User configuration files
 # Keep personal configs private while preserving examples
 config.json
