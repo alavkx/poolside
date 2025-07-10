@@ -1,7 +1,7 @@
-import { IntegrationUtils } from './integration-utils.js';
-import chalk from 'chalk';
-import ora from 'ora';
-import os from 'os';
+import { IntegrationUtils } from "./integration-utils.js";
+import chalk from "chalk";
+import ora from "ora";
+import os from "os";
 
 interface EpicWorkflowConfig {
   jira: {
@@ -54,6 +54,7 @@ interface Ticket {
 interface ProcessEpicOptions {
   agentName?: string;
   claimantName?: string;
+  dryRun?: boolean;
 }
 
 interface ProcessEpicResult {
@@ -90,7 +91,7 @@ export class EpicWorkflow {
     epicId: string,
     options: ProcessEpicOptions = {}
   ): Promise<ProcessEpicResult | null> {
-    const agentName = options.agentName || 'Coding Agent';
+    const agentName = options.agentName || "Coding Agent";
     const claimantName = options.claimantName || agentName;
 
     console.log(chalk.blue(`🚀 Processing Epic: ${epicId}`));
@@ -117,7 +118,7 @@ export class EpicWorkflow {
       const childTickets = await this.utils.getEpicChildren(epicId);
 
       if (childTickets.length === 0) {
-        console.log(chalk.yellow('⚠️  No child tickets found for this epic'));
+        console.log(chalk.yellow("⚠️  No child tickets found for this epic"));
         return null;
       }
 
@@ -126,7 +127,9 @@ export class EpicWorkflow {
 
       if (!availableTicket) {
         console.log(
-          chalk.yellow('⚠️  No available tickets found (all tickets are in progress or assigned)')
+          chalk.yellow(
+            "⚠️  No available tickets found (all tickets are in progress or assigned)"
+          )
         );
         return null;
       }
@@ -138,24 +141,32 @@ export class EpicWorkflow {
       );
 
       // Step 5: Claim the ticket
-      const claimMessage = `Ticket claimed by ${claimantName}`;
-      await this.utils.addCommentToTicket(availableTicket.key, claimMessage);
-
-      console.log(chalk.green(`✅ Ticket ${availableTicket.key} has been claimed`));
+      await this.utils.claimTicket(
+        availableTicket.key,
+        claimantName,
+        this.config.jira.username || "",
+        options.dryRun || false
+      );
 
       // Step 6: Generate coding prompt
-      const prompt = await this.utils.generateCodingPrompt(availableTicket, epic);
+      const prompt = await this.utils.generateCodingPrompt(
+        availableTicket,
+        epic
+      );
 
       // Step 7: Save to temp file and output
-      const tempFile = await this.utils.writeToTempFile(prompt, `${availableTicket.key}-prompt.md`);
+      const tempFile = await this.utils.writeToTempFile(
+        prompt,
+        `${availableTicket.key}-prompt.md`
+      );
 
       console.log(chalk.green(`✅ Coding prompt saved to: ${tempFile}`));
 
       // Step 8: Output to stdout
-      console.log(chalk.blue('\n📝 Generated Coding Prompt:'));
-      console.log(chalk.gray('='.repeat(60)));
+      console.log(chalk.blue("\n📝 Generated Coding Prompt:"));
+      console.log(chalk.gray("=".repeat(60)));
       console.log(prompt);
-      console.log(chalk.gray('='.repeat(60)));
+      console.log(chalk.gray("=".repeat(60)));
 
       return {
         epic,
@@ -164,37 +175,43 @@ export class EpicWorkflow {
         tempFile,
       };
     } catch (error: any) {
-      console.error(chalk.red('❌ Epic workflow failed:'), error.message);
+      console.error(chalk.red("❌ Epic workflow failed:"), error.message);
       if (this.verbose) {
-        console.error(chalk.red('Stack trace:'), error.stack);
+        console.error(chalk.red("Stack trace:"), error.stack);
       }
       throw error;
     }
   }
 
   async validateConnections(): Promise<void> {
-    const spinner = ora('Validating connections...').start();
+    const spinner = ora("Validating connections...").start();
 
     try {
       const connections = await this.utils.validateConnections();
 
       if (!connections.jira) {
-        throw new Error('JIRA connection failed. Check your JIRA configuration.');
+        throw new Error(
+          "JIRA connection failed. Check your JIRA configuration."
+        );
       }
 
       if (!connections.ai) {
-        throw new Error('AI processor not available. Check your OpenAI configuration.');
+        throw new Error(
+          "AI processor not available. Check your OpenAI configuration."
+        );
       }
 
-      spinner.succeed('All connections validated');
+      spinner.succeed("All connections validated");
 
       if (this.verbose) {
-        console.log(chalk.gray(`  • JIRA: ${connections.jira ? '✅' : '❌'}`));
-        console.log(chalk.gray(`  • GitHub: ${connections.github ? '✅' : '❌'}`));
-        console.log(chalk.gray(`  • AI: ${connections.ai ? '✅' : '❌'}`));
+        console.log(chalk.gray(`  • JIRA: ${connections.jira ? "✅" : "❌"}`));
+        console.log(
+          chalk.gray(`  • GitHub: ${connections.github ? "✅" : "❌"}`)
+        );
+        console.log(chalk.gray(`  • AI: ${connections.ai ? "✅" : "❌"}`));
       }
     } catch (error: any) {
-      spinner.fail('Connection validation failed');
+      spinner.fail("Connection validation failed");
       throw error;
     }
   }
@@ -208,7 +225,11 @@ export class EpicWorkflow {
       }
     } catch (error: any) {
       if (this.verbose) {
-        console.log(chalk.gray(`Direct epic lookup failed, trying search: ${error.message}`));
+        console.log(
+          chalk.gray(
+            `Direct epic lookup failed, trying search: ${error.message}`
+          )
+        );
       }
     }
 
@@ -226,7 +247,7 @@ export class EpicWorkflow {
 
   async getEpicByKey(epicKey: string): Promise<Epic> {
     if (!this.utils.jiraClient) {
-      throw new Error('JIRA client not initialized');
+      throw new Error("JIRA client not initialized");
     }
 
     const jiraClient = this.utils.jiraClient; // Store reference to avoid undefined issues
@@ -236,29 +257,35 @@ export class EpicWorkflow {
       let issue: any;
 
       if (jiraClient.isPAT) {
-        const response = await jiraClient.axios!.get(`/rest/api/2/issue/${epicKey}`);
+        const response = await jiraClient.axios!.get(
+          `/rest/api/2/issue/${epicKey}`
+        );
         issue = response.data;
       } else {
         issue = await jiraClient.jira!.findIssue(epicKey);
       }
 
       // Verify it's an epic
-      if (issue.fields.issuetype.name !== 'Epic') {
-        throw new Error(`${epicKey} is not an Epic (it's a ${issue.fields.issuetype.name})`);
+      if (issue.fields.issuetype.name !== "Epic") {
+        throw new Error(
+          `${epicKey} is not an Epic (it's a ${issue.fields.issuetype.name})`
+        );
       }
 
       const epic: Epic = {
         key: issue.key,
         summary: issue.fields.summary,
-        description: issue.fields.description || '',
+        description: issue.fields.description || "",
         status: issue.fields.status.name,
-        assignee: issue.fields.assignee?.displayName || 'Unassigned',
-        reporter: issue.fields.reporter?.displayName || 'Unknown',
+        assignee: issue.fields.assignee?.displayName || "Unassigned",
+        reporter: issue.fields.reporter?.displayName || "Unknown",
         created: issue.fields.created,
         updated: issue.fields.updated,
         labels: issue.fields.labels || [],
         components: issue.fields.components.map((c: any) => c.name),
-        url: `https://${this.config.jira.host || 'localhost'}/browse/${issue.key}`,
+        url: `https://${this.config.jira.host || "localhost"}/browse/${
+          issue.key
+        }`,
       };
 
       spinner.succeed(`Epic ${epicKey} retrieved`);
@@ -269,21 +296,26 @@ export class EpicWorkflow {
     }
   }
 
-  async listEpics(projectKey: string, options: ListEpicsOptions = {}): Promise<Epic[]> {
+  async listEpics(
+    projectKey: string,
+    options: ListEpicsOptions = {}
+  ): Promise<Epic[]> {
     console.log(chalk.blue(`🔍 Listing epics for project: ${projectKey}`));
 
     try {
       const epics = await this.utils.searchJiraEpics(projectKey, options);
 
       if (epics.length === 0) {
-        console.log(chalk.yellow('No epics found'));
+        console.log(chalk.yellow("No epics found"));
         return [];
       }
 
       console.log(chalk.green(`\n📋 Found ${epics.length} epic(s):`));
 
       epics.forEach((epic, index) => {
-        console.log(`\n${index + 1}. ${chalk.cyan(epic.key)} - ${epic.summary}`);
+        console.log(
+          `\n${index + 1}. ${chalk.cyan(epic.key)} - ${epic.summary}`
+        );
         console.log(`   Status: ${epic.status}`);
         console.log(`   Assignee: ${epic.assignee}`);
         console.log(`   Created: ${new Date(epic.created).toDateString()}`);
@@ -291,13 +323,17 @@ export class EpicWorkflow {
 
         if (epic.description && epic.description.length > 0) {
           const shortDesc = epic.description.substring(0, 100);
-          console.log(`   Description: ${shortDesc}${epic.description.length > 100 ? '...' : ''}`);
+          console.log(
+            `   Description: ${shortDesc}${
+              epic.description.length > 100 ? "..." : ""
+            }`
+          );
         }
       });
 
       return epics;
     } catch (error: any) {
-      console.error(chalk.red('❌ Failed to list epics:'), error.message);
+      console.error(chalk.red("❌ Failed to list epics:"), error.message);
       throw error;
     }
   }
@@ -316,36 +352,36 @@ export class EpicWorkflow {
       const childTickets = await this.utils.getEpicChildren(epicId);
 
       // Analyze ticket statuses
-      const statusSummary = childTickets.reduce(
-        (acc, ticket) => {
-          const status = ticket.status;
-          acc[status] = (acc[status] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
+      const statusSummary = childTickets.reduce((acc, ticket) => {
+        const status = ticket.status;
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
 
       const availableTickets = childTickets.filter(
         (ticket) => this.utils.findAvailableTicket([ticket]) !== null
       );
 
       const inProgressTickets = childTickets.filter(
-        (ticket) => ticket.assignee || ticket.status.toLowerCase().includes('progress')
+        (ticket) =>
+          ticket.assignee || ticket.status.toLowerCase().includes("progress")
       );
 
-      console.log(chalk.green(`\n📈 Epic Status: ${epic.key} - ${epic.summary}`));
+      console.log(
+        chalk.green(`\n📈 Epic Status: ${epic.key} - ${epic.summary}`)
+      );
       console.log(`Epic Status: ${epic.status}`);
       console.log(`Total Child Tickets: ${childTickets.length}`);
       console.log(`Available Tickets: ${availableTickets.length}`);
       console.log(`In Progress Tickets: ${inProgressTickets.length}`);
 
-      console.log('\n📊 Status Breakdown:');
+      console.log("\n📊 Status Breakdown:");
       Object.entries(statusSummary).forEach(([status, count]) => {
         console.log(`  ${status}: ${count}`);
       });
 
       if (availableTickets.length > 0) {
-        console.log(chalk.green('\n🎯 Next Available Ticket:'));
+        console.log(chalk.green("\n🎯 Next Available Ticket:"));
         const nextTicket = this.utils.findAvailableTicket(childTickets);
         if (nextTicket) {
           console.log(`  ${nextTicket.key} - ${nextTicket.summary}`);
@@ -362,7 +398,7 @@ export class EpicWorkflow {
         inProgressCount: inProgressTickets.length,
       };
     } catch (error: any) {
-      console.error(chalk.red('❌ Failed to get epic status:'), error.message);
+      console.error(chalk.red("❌ Failed to get epic status:"), error.message);
       throw error;
     }
   }

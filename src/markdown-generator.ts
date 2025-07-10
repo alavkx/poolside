@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { format } from "date-fns";
 
 interface RepoConfig {
   name: string;
@@ -50,7 +50,9 @@ export class MarkdownGenerator {
     const sections: string[] = [];
 
     // Main header
-    sections.push(this.generateMainHeader(releaseConfig, targetMonth, totalStats));
+    sections.push(
+      this.generateMainHeader(releaseConfig, targetMonth, totalStats)
+    );
 
     // Executive summary
     if (releaseConfig.includeSummary) {
@@ -68,7 +70,7 @@ export class MarkdownGenerator {
     // Optional: Statistics and metrics
     sections.push(this.generateStatisticsSection(totalStats, allRepoData));
 
-    return sections.join('\n\n');
+    return sections.join("\n\n");
   }
 
   generateMainHeader(
@@ -76,16 +78,20 @@ export class MarkdownGenerator {
     targetMonth: string,
     totalStats: TotalStats
   ): string {
-    const [year, monthNum] = targetMonth.split('-');
-    const monthName = format(new Date(Number(year), Number(monthNum) - 1), 'MMMM yyyy');
+    const [year, monthNum] = targetMonth.split("-");
+    const monthName = format(
+      new Date(Number(year), Number(monthNum) - 1),
+      "MMMM yyyy"
+    );
 
-    const title = releaseConfig.title || 'Multi-Repository Release Notes';
+    const title = releaseConfig.title || "Multi-Repository Release Notes";
     const description =
-      releaseConfig.description || 'Comprehensive release notes across all repositories';
+      releaseConfig.description ||
+      "Comprehensive release notes across all repositories";
 
     return `# ${title} - ${monthName}
 
-**Release Date:** ${format(new Date(), 'MMMM do, yyyy')}  
+**Release Date:** ${format(new Date(), "MMMM do, yyyy")}  
 **Repositories:** ${totalStats.totalRepos}  
 **Total Changes:** ${totalStats.totalPRs} pull requests  
 
@@ -94,7 +100,10 @@ ${description}
 ---`;
   }
 
-  generateExecutiveSummary(allRepoData: RepoData[], totalStats: TotalStats): string {
+  generateExecutiveSummary(
+    allRepoData: RepoData[],
+    totalStats: TotalStats
+  ): string {
     const summaryRepos = allRepoData.filter(
       (repo) =>
         repo.repoConfig.includeInSummary &&
@@ -117,18 +126,22 @@ This month focused on behind-the-scenes improvements and maintenance across our 
     };
 
     summaryRepos.forEach((repo) => {
-      Object.entries(repo.releaseNotesData || {}).forEach(([category, entries]) => {
-        if (aggregatedChanges[category]) {
-          aggregatedChanges[category].push(...entries);
+      Object.entries(repo.releaseNotesData || {}).forEach(
+        ([category, entries]) => {
+          if (aggregatedChanges[category]) {
+            aggregatedChanges[category].push(...entries);
+          }
         }
-      });
+      );
     });
 
     const totalChanges = Object.values(aggregatedChanges).flat().length;
     const changeTypes: string[] = [];
 
     if (aggregatedChanges.features.length > 0) {
-      changeTypes.push(`**${aggregatedChanges.features.length}** new features and capabilities`);
+      changeTypes.push(
+        `**${aggregatedChanges.features.length}** new features and capabilities`
+      );
     }
     if (aggregatedChanges.improvements.length > 0) {
       changeTypes.push(
@@ -136,12 +149,14 @@ This month focused on behind-the-scenes improvements and maintenance across our 
       );
     }
     if (aggregatedChanges.bugs.length > 0) {
-      changeTypes.push(`**${aggregatedChanges.bugs.length}** fixes and stability improvements`);
+      changeTypes.push(
+        `**${aggregatedChanges.bugs.length}** fixes and stability improvements`
+      );
     }
 
     const changesSummary =
       changeTypes.length > 0
-        ? changeTypes.join(', ')
+        ? changeTypes.join(", ")
         : `**${totalChanges}** improvements and updates`;
 
     // Generate top highlights from features and improvements
@@ -150,13 +165,13 @@ This month focused on behind-the-scenes improvements and maintenance across our 
       ...aggregatedChanges.improvements.slice(0, 2),
     ].slice(0, 4);
 
-    let highlightsText = '';
+    let highlightsText = "";
     if (topHighlights.length > 0) {
       highlightsText = `
 
 ### Key Highlights:
 
-${topHighlights.map((highlight) => `- ${highlight}`).join('\n')}`;
+${topHighlights.map((highlight) => `- ${highlight}`).join("\n")}`;
     }
 
     return `## 🎯 This Month's Highlights
@@ -166,23 +181,32 @@ This month we delivered ${changesSummary} across **${summaryRepos.length}** repo
 ---`;
   }
 
-  generateTableOfContents(allRepoData: RepoData[], releaseConfig: ReleaseConfig): string {
+  generateTableOfContents(
+    allRepoData: RepoData[],
+    releaseConfig: ReleaseConfig
+  ): string {
     const repoSections = allRepoData
       .filter((repo) => !repo.error)
-      .sort((a, b) => (a.repoConfig.priority || 999) - (b.repoConfig.priority || 999))
+      .sort(
+        (a, b) =>
+          (a.repoConfig.priority || 999) - (b.repoConfig.priority || 999)
+      )
       .map((repo) => {
-        const hasChanges = Object.values(repo.releaseNotesData || {}).flat().length > 0;
-        const anchor = repo.repoConfig.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const hasChanges =
+          Object.values(repo.releaseNotesData || {}).flat().length > 0;
+        const anchor = repo.repoConfig.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "-");
         return `  - [${repo.repoConfig.name}](#${anchor})${
-          hasChanges ? '' : ' *(no customer-facing changes)*'
+          hasChanges ? "" : " *(no customer-facing changes)*"
         }`;
       });
 
     const sections = [
       "- [🎯 This Month's Highlights](#-this-months-highlights)",
-      '- [📦 Repository Updates](#-repository-updates)',
+      "- [📦 Repository Updates](#-repository-updates)",
       ...repoSections,
-      '- [📊 Statistics & Metrics](#-statistics--metrics)',
+      "- [📊 Statistics & Metrics](#-statistics--metrics)",
     ];
 
     if (!releaseConfig.includeSummary) {
@@ -191,7 +215,7 @@ This month we delivered ${changesSummary} across **${summaryRepos.length}** repo
 
     return `## 📋 Table of Contents
 
-${sections.join('\n')}
+${sections.join("\n")}
 
 ---`;
   }
@@ -210,12 +234,12 @@ ${sections.join('\n')}
 
     return `## 📦 Repository Updates
 
-${repoSections.join('\n\n')}`;
+${repoSections.join("\n\n")}`;
   }
 
   generateRepoSection(repo: RepoData): string {
     const { repoConfig, releaseNotesData = {} } = repo;
-    const anchor = repoConfig.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const anchor = repoConfig.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
 
     const totalChanges = Object.values(releaseNotesData).flat().length;
 
@@ -237,33 +261,38 @@ No customer-facing changes this month - focused on internal improvements and mai
     if (releaseNotesData.features && releaseNotesData.features.length > 0) {
       sections.push(`#### ✨ New Features
 
-${releaseNotesData.features.map((feature) => `- ${feature}`).join('\n')}`);
+${releaseNotesData.features.map((feature) => `- ${feature}`).join("\n")}`);
     }
 
     // Improvements
-    if (releaseNotesData.improvements && releaseNotesData.improvements.length > 0) {
+    if (
+      releaseNotesData.improvements &&
+      releaseNotesData.improvements.length > 0
+    ) {
       sections.push(`#### 🚀 Improvements
 
-${releaseNotesData.improvements.map((improvement) => `- ${improvement}`).join('\n')}`);
+${releaseNotesData.improvements
+  .map((improvement) => `- ${improvement}`)
+  .join("\n")}`);
     }
 
     // Bug Fixes
     if (releaseNotesData.bugs && releaseNotesData.bugs.length > 0) {
       sections.push(`#### 🐛 Bug Fixes
 
-${releaseNotesData.bugs.map((bug) => `- ${bug}`).join('\n')}`);
+${releaseNotesData.bugs.map((bug) => `- ${bug}`).join("\n")}`);
     }
 
     // Other Changes
     if (releaseNotesData.other && releaseNotesData.other.length > 0) {
       sections.push(`#### 📋 Other Updates
 
-${releaseNotesData.other.map((other) => `- ${other}`).join('\n')}`);
+${releaseNotesData.other.map((other) => `- ${other}`).join("\n")}`);
     }
 
     return `${header}
 
-${sections.join('\n\n')}`;
+${sections.join("\n\n")}`;
   }
 
   generateErrorSection(repo: RepoData): string {
@@ -278,32 +307,37 @@ ${sections.join('\n\n')}`;
 Please check the repository configuration and try again.`;
   }
 
-  generateStatisticsSection(totalStats: TotalStats, allRepoData: RepoData[]): string {
+  generateStatisticsSection(
+    totalStats: TotalStats,
+    allRepoData: RepoData[]
+  ): string {
     const successfulRepos = allRepoData.filter((repo) => !repo.error);
     const failedRepos = allRepoData.filter((repo) => repo.error);
 
     const totalEntries = successfulRepos.reduce(
-      (sum, repo) => sum + Object.values(repo.releaseNotesData || {}).flat().length,
+      (sum, repo) =>
+        sum + Object.values(repo.releaseNotesData || {}).flat().length,
       0
     );
 
-    const categoryBreakdown = successfulRepos.reduce(
-      (acc, repo) => {
-        Object.entries(repo.releaseNotesData || {}).forEach(([category, entries]) => {
+    const categoryBreakdown = successfulRepos.reduce((acc, repo) => {
+      Object.entries(repo.releaseNotesData || {}).forEach(
+        ([category, entries]) => {
           acc[category] = (acc[category] || 0) + entries.length;
-        });
-        return acc;
-      },
-      {} as Record<string, number>
-    );
+        }
+      );
+      return acc;
+    }, {} as Record<string, number>);
 
     const breakdownText = Object.entries(categoryBreakdown)
       .filter(([_, count]) => count > 0)
       .map(
         ([category, count]) =>
-          `- **${category.charAt(0).toUpperCase() + category.slice(1)}:** ${count} entries`
+          `- **${
+            category.charAt(0).toUpperCase() + category.slice(1)
+          }:** ${count} entries`
       )
-      .join('\n');
+      .join("\n");
 
     let stats = `## 📊 Statistics & Metrics
 
@@ -315,7 +349,7 @@ Please check the repository configuration and try again.`;
 - **Release Note Entries:** ${totalEntries}
 
 ### Breakdown by Category
-${breakdownText || 'No categorized entries'}`;
+${breakdownText || "No categorized entries"}`;
 
     if (failedRepos.length > 0) {
       stats += `
@@ -323,15 +357,20 @@ ${breakdownText || 'No categorized entries'}`;
 ### ⚠️ Processing Issues
 The following repositories encountered issues during processing:
 
-${failedRepos.map((repo) => `- **${repo.repoConfig.name}:** ${repo.error}`).join('\n')}`;
+${failedRepos
+  .map((repo) => `- **${repo.repoConfig.name}:** ${repo.error}`)
+  .join("\n")}`;
     }
 
     stats += `
 
 ---
 
-*Release notes generated on ${format(new Date(), 'PPP')} at ${format(new Date(), 'pp')}*  
-*Generated by Agent Workflow CLI*`;
+*Release notes generated on ${format(new Date(), "PPP")} at ${format(
+      new Date(),
+      "pp"
+    )}*  
+*Generated by Poolside CLI*`;
 
     return stats;
   }

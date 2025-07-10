@@ -1,4 +1,4 @@
-# Agent Workflow CLI
+# Poolside CLI
 
 A CLI tool for automating workflows with productivity tools like JIRA and GitHub, designed specifically for coding agents and AI assistants.
 
@@ -13,23 +13,25 @@ A CLI tool for automating workflows with productivity tools like JIRA and GitHub
 ## Installation
 
 ```bash
-npm install -g agent-workflow-cli
+npm install -g poolside-cli
 ```
 
 Or run directly with npx:
 
 ```bash
-npx agent-workflow-cli --help
+npx poolside-cli --help
 ```
 
 ## Quick Start
 
 1. **Initialize environment configuration:**
+
    ```bash
-   agent-workflow init-env
+   poolside init-env
    ```
 
 2. **Edit the `.env` file** with your credentials:
+
    ```bash
    # OpenAI Configuration (Required)
    OPENAI_API_KEY=your_openai_api_key_here
@@ -46,14 +48,17 @@ npx agent-workflow-cli --help
    ```
 
 3. **Test your connections:**
+
    ```bash
-   agent-workflow test-connections
+   poolside test-connections
    ```
 
 4. **Process an epic:**
    ```bash
-   agent-workflow process-epic PROJ-123
+   poolside process-epic PROJ-123
    ```
+
+````
 
 ## Core Workflow
 
@@ -76,10 +81,11 @@ The main workflow (`process-epic`) performs the following steps:
 Process a JIRA epic to claim the next available ticket and generate a coding prompt.
 
 ```bash
-agent-workflow process-epic PROJ-123 --agent "Cursor Agent" --claimant "Developer Bot"
-```
+poolside process-epic PROJ-123 --agent "Cursor Agent" --claimant "Developer Bot"
+````
 
 **Options:**
+
 - `-a, --agent <name>`: Name of the agent claiming the ticket (default: "Coding Agent")
 - `-c, --claimant <name>`: Name to use when claiming the ticket (defaults to agent name)
 - `--verbose`: Enable verbose logging for debugging
@@ -89,10 +95,11 @@ agent-workflow process-epic PROJ-123 --agent "Cursor Agent" --claimant "Develope
 List all epics for a JIRA project.
 
 ```bash
-agent-workflow list-epics PROJ --limit 10
+poolside list-epics PROJ --limit 10
 ```
 
 **Options:**
+
 - `-l, --limit <number>`: Maximum number of epics to return (default: 20)
 - `--verbose`: Enable verbose logging for debugging
 
@@ -101,10 +108,11 @@ agent-workflow list-epics PROJ --limit 10
 Get the status of a JIRA epic and its child tickets.
 
 ```bash
-agent-workflow epic-status PROJ-123
+poolside epic-status PROJ-123
 ```
 
 **Options:**
+
 - `--verbose`: Enable verbose logging for debugging
 
 ### `setup-jira-pat`
@@ -112,10 +120,11 @@ agent-workflow epic-status PROJ-123
 Set up JIRA Personal Access Token for better security.
 
 ```bash
-agent-workflow setup-jira-pat
+poolside setup-jira-pat
 ```
 
 **Options:**
+
 - `--jira-base-url <url>`: JIRA base URL (overrides env var)
 
 ### `init-env`
@@ -123,10 +132,11 @@ agent-workflow setup-jira-pat
 Initialize environment configuration file.
 
 ```bash
-agent-workflow init-env -o .env
+poolside init-env -o .env
 ```
 
 **Options:**
+
 - `-o, --output <file>`: Output env file path (default: ".env")
 
 ### `check-config`
@@ -134,7 +144,7 @@ agent-workflow init-env -o .env
 Check current environment configuration.
 
 ```bash
-agent-workflow check-config
+poolside check-config
 ```
 
 ### `test-connections`
@@ -142,22 +152,22 @@ agent-workflow check-config
 Test connections to JIRA, GitHub, and OpenAI.
 
 ```bash
-agent-workflow test-connections --verbose
+poolside test-connections --verbose
 ```
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | OpenAI API key for generating coding prompts |
-| `JIRA_HOST` | Yes | JIRA server hostname (without https://) |
-| `JIRA_USERNAME` | Yes | JIRA username |
-| `JIRA_PASSWORD` | Yes | JIRA password or Personal Access Token |
-| `GITHUB_TOKEN` | No | GitHub Personal Access Token for enhanced features |
-| `AI_MODEL` | No | OpenAI model to use (default: gpt-4o) |
-| `AI_MAX_TOKENS` | No | Maximum tokens for AI responses (default: 4000) |
+| Variable         | Required | Description                                        |
+| ---------------- | -------- | -------------------------------------------------- |
+| `OPENAI_API_KEY` | Yes      | OpenAI API key for generating coding prompts       |
+| `JIRA_HOST`      | Yes      | JIRA server hostname (without https://)            |
+| `JIRA_USERNAME`  | Yes      | JIRA username                                      |
+| `JIRA_PASSWORD`  | Yes      | JIRA password or Personal Access Token             |
+| `GITHUB_TOKEN`   | No       | GitHub Personal Access Token for enhanced features |
+| `AI_MODEL`       | No       | OpenAI model to use (default: gpt-4o)              |
+| `AI_MAX_TOKENS`  | No       | Maximum tokens for AI responses (default: 4000)    |
 
 ### JIRA Authentication
 
@@ -174,26 +184,26 @@ For Atlassian Cloud instances, PAT authentication is recommended for better secu
 
 ```bash
 # Process an epic and claim the next available ticket
-agent-workflow process-epic PROJ-123
+poolside process-epic PROJ-123
 
 # Use a custom agent name
-agent-workflow process-epic PROJ-123 --agent "Claude Agent"
+poolside process-epic PROJ-123 --agent "Claude Agent"
 
 # Use different names for agent and claimant
-agent-workflow process-epic PROJ-123 --agent "Cursor Agent" --claimant "John Doe"
+poolside process-epic PROJ-123 --agent "Cursor Agent" --claimant "John Doe"
 ```
 
 ### Epic Management
 
 ```bash
 # List all epics in a project
-agent-workflow list-epics PROJ
+poolside list-epics PROJ
 
 # Get detailed status of an epic
-agent-workflow epic-status PROJ-123
+poolside epic-status PROJ-123
 
 # Check what tickets are available
-agent-workflow epic-status PROJ-123 --verbose
+poolside epic-status PROJ-123 --verbose
 ```
 
 ### Output
@@ -205,6 +215,7 @@ The `process-epic` command generates:
 3. **Return Data**: Structured data about the epic, ticket, and generated prompt
 
 Example output:
+
 ```
 🚀 Processing Epic: PROJ-123
 ✅ Found epic: Implement user authentication system
@@ -237,28 +248,31 @@ This tool is specifically designed for integration with coding agents like Curso
 - **Automated Execution**: All commands can be run without user interaction
 - **Structured Output**: Consistent output format for parsing by agents
 - **Error Handling**: Comprehensive error reporting for debugging
-- **Verbose Logging**: Detailed logging for troubleshooting agent workflows
+- **Verbose Logging**: Detailed logging for troubleshooting automated workflows
 
 ### Agent Integration Example
 
 ```javascript
 // Example agent integration
-const { execSync } = require('child_process');
+const { execSync } = require("child_process");
 
 try {
-  const result = execSync('agent-workflow process-epic PROJ-123 --agent "My Agent"', 
-    { encoding: 'utf8' });
-  
+  const result = execSync('poolside process-epic PROJ-123 --agent "My Agent"', {
+    encoding: "utf8",
+  });
+
   // Parse the output to extract the prompt
-  const promptMatch = result.match(/📝 Generated Coding Prompt:\n={60}\n([\s\S]*?)\n={60}/);
+  const promptMatch = result.match(
+    /📝 Generated Coding Prompt:\n={60}\n([\s\S]*?)\n={60}/
+  );
   const prompt = promptMatch ? promptMatch[1] : null;
-  
+
   if (prompt) {
     // Use the prompt for coding tasks
-    console.log('Generated prompt:', prompt);
+    console.log("Generated prompt:", prompt);
   }
 } catch (error) {
-  console.error('Workflow failed:', error.message);
+  console.error("Workflow failed:", error.message);
 }
 ```
 
@@ -267,16 +281,19 @@ try {
 ### Common Issues
 
 1. **JIRA Authentication Failures**
+
    - Use `setup-jira-pat` for more secure authentication
    - Verify JIRA_HOST doesn't include `https://`
    - Check if your JIRA instance requires special permissions
 
 2. **Epic Not Found**
+
    - Verify the epic key is correct
    - Ensure you have access to the project
    - Check if the issue type is actually "Epic"
 
 3. **No Available Tickets**
+
    - All tickets may be assigned or in progress
    - Use `epic-status` command to check ticket statuses
    - Verify the epic has child tickets
@@ -291,7 +308,7 @@ try {
 Use `--verbose` flag on any command for detailed debugging information:
 
 ```bash
-agent-workflow process-epic PROJ-123 --verbose
+poolside process-epic PROJ-123 --verbose
 ```
 
 ## Contributing
@@ -309,6 +326,7 @@ MIT License - see LICENSE file for details.
 ## Support
 
 For issues and questions:
+
 - Create an issue on GitHub
 - Check the troubleshooting section
 - Use `--verbose` flag for detailed error information

@@ -1,8 +1,8 @@
-import JiraApi from 'jira-client';
-import axios, { AxiosInstance } from 'axios';
-import ora from 'ora';
-import chalk from 'chalk';
-import { JiraPATManager } from './jira-pat-manager.js';
+import JiraApi from "jira-client";
+import axios, { AxiosInstance } from "axios";
+import ora from "ora";
+import chalk from "chalk";
+import { JiraPATManager } from "./jira-pat-manager.js";
 
 export interface JiraTicket {
   key: string;
@@ -42,12 +42,12 @@ export class JiraClient {
   constructor(config: JiraConfig) {
     if (!config.host) {
       throw new Error(
-        'JIRA host is required. Set JIRA_HOST environment variable or pass jiraBaseUrl option.'
+        "JIRA host is required. Set JIRA_HOST environment variable or pass jiraBaseUrl option."
       );
     }
     if (!config.username || !config.password) {
       throw new Error(
-        'JIRA credentials are required. Set JIRA_USERNAME and JIRA_PASSWORD environment variables.'
+        "JIRA credentials are required. Set JIRA_USERNAME and JIRA_PASSWORD environment variables."
       );
     }
 
@@ -58,23 +58,26 @@ export class JiraClient {
     this.isPAT = this.patManager.isPAT(config.password);
 
     if (this.isPAT) {
-      // Use axios for PAT-based requests (Bearer token)
+      // Use axios for PAT-based requests (Basic auth with PAT as password)
       this.axios = axios.create({
         baseURL: `https://${config.host}`,
+        auth: {
+          username: config.username,
+          password: config.password,
+        },
         headers: {
-          Authorization: `Bearer ${config.password}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         timeout: 30000,
       });
     } else {
       // Use traditional jira-client for username/password
       this.jira = new JiraApi({
-        protocol: 'https',
+        protocol: "https",
         host: config.host,
         username: config.username,
         password: config.password,
-        apiVersion: '2',
+        apiVersion: "2",
         strictSSL: true,
       });
     }
@@ -101,17 +104,17 @@ export class JiraClient {
               // Use traditional jira-client
               issue = await this.jira.findIssue(key);
             } else {
-              throw new Error('No JIRA client available');
+              throw new Error("No JIRA client available");
             }
 
             return {
               key: issue.key,
               summary: issue.fields.summary,
-              description: issue.fields.description || '',
+              description: issue.fields.description || "",
               status: issue.fields.status.name,
-              priority: issue.fields.priority?.name || 'None',
-              assignee: issue.fields.assignee?.displayName || 'Unassigned',
-              reporter: issue.fields.reporter?.displayName || 'Unknown',
+              priority: issue.fields.priority?.name || "None",
+              assignee: issue.fields.assignee?.displayName || "Unassigned",
+              reporter: issue.fields.reporter?.displayName || "Unknown",
               created: issue.fields.created,
               updated: issue.fields.updated,
               resolved: issue.fields.resolutiondate,
@@ -129,19 +132,23 @@ export class JiraClient {
       );
 
       const validTickets = tickets
-        .filter((result) => result.status === 'fulfilled' && result.value !== null)
+        .filter(
+          (result) => result.status === "fulfilled" && result.value !== null
+        )
         .map((result) => (result as PromiseFulfilledResult<JiraTicket>).value);
 
       const failedCount = tickets.length - validTickets.length;
       if (failedCount > 0) {
-        spinner.warn(`Fetched ${validTickets.length} JIRA tickets (${failedCount} failed)`);
+        spinner.warn(
+          `Fetched ${validTickets.length} JIRA tickets (${failedCount} failed)`
+        );
       } else {
         spinner.succeed(`Fetched ${validTickets.length} JIRA tickets`);
       }
 
       return validTickets;
     } catch (error) {
-      spinner.fail('Failed to fetch JIRA tickets');
+      spinner.fail("Failed to fetch JIRA tickets");
       throw error;
     }
   }
@@ -170,7 +177,7 @@ export class JiraClient {
   async testConnection(): Promise<boolean> {
     try {
       if (this.isPAT && this.axios) {
-        const response = await this.axios.get('/rest/api/2/myself');
+        const response = await this.axios.get("/rest/api/2/myself");
         return response.status === 200;
       } else if (this.jira) {
         const user = await this.jira.getCurrentUser();
@@ -179,18 +186,25 @@ export class JiraClient {
       return false;
     } catch (error: any) {
       // If credentials fail and not using PAT, suggest PAT setup
-      if (!this.isPAT && (error.response?.status === 401 || error.response?.status === 403)) {
-        console.log(chalk.yellow('\n⚠️  JIRA authentication failed with username/password.'));
+      if (
+        !this.isPAT &&
+        (error.response?.status === 401 || error.response?.status === 403)
+      ) {
+        console.log(
+          chalk.yellow(
+            "\n⚠️  JIRA authentication failed with username/password."
+          )
+        );
         console.log(
           chalk.blue(
-            '💡 Consider setting up a Personal Access Token for better security and reliability.'
+            "💡 Consider setting up a Personal Access Token for better security and reliability."
           )
         );
 
         try {
           await this.patManager.setupPATWorkflow();
         } catch (patError) {
-          console.log(chalk.gray('Continuing with existing credentials...'));
+          console.log(chalk.gray("Continuing with existing credentials..."));
         }
       }
       return false;

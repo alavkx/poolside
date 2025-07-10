@@ -1,4 +1,4 @@
-declare module 'jira-client' {
+declare module "jira-client" {
   interface JiraApiOptions {
     protocol?: string;
     host: string;
@@ -17,5 +17,8 @@ declare module 'jira-client' {
     getCurrentUser(): Promise<any>;
     searchJira(jql: string, options?: any): Promise<any>;
     addComment(issueKey: string, comment: string): Promise<any>;
+    listTransitions(issueKey: string): Promise<any>;
+    transitionIssue(issueKey: string, transitionData: any): Promise<any>;
+    updateIssue(issueKey: string, updateData: any): Promise<any>;
   }
 }
