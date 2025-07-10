@@ -66,8 +66,8 @@ export class JiraPATManager {
 
   // Create a new PAT using existing username/password
   async createPAT(
-    tokenName: string = 'Release Notes Generator',
-    expirationDays: number = 365
+    tokenName = 'Release Notes Generator',
+    expirationDays = 365
   ): Promise<PATResult> {
     const spinner = ora('Creating JIRA Personal Access Token...').start();
 

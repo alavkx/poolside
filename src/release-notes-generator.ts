@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
-import { GitHubClient, GitHubPR } from './github-client.js';
-import { JiraClient, JiraTicket } from './jira-client.js';
-import { AIProcessor, AIConfig, ReleaseNotesData } from './ai-processor.js';
+import { GitHubClient, type GitHubPR } from './github-client.js';
+import { JiraClient, type JiraTicket } from './jira-client.js';
+import { AIProcessor, type AIConfig, type ReleaseNotesData } from './ai-processor.js';
 import { MarkdownGenerator } from './markdown-generator.js';
 import chalk from 'chalk';
 import ora from 'ora';

@@ -1,5 +1,5 @@
 import JiraApi from "jira-client";
-import axios, { AxiosInstance } from "axios";
+import axios, { type AxiosInstance } from "axios";
 import ora from "ora";
 import chalk from "chalk";
 import { JiraPATManager } from "./jira-pat-manager.js";
@@ -37,7 +37,7 @@ export class JiraClient {
   private patManager: JiraPATManager;
   public isPAT: boolean;
   public axios?: AxiosInstance;
-  public jira?: JiraApi;
+  public jira?: InstanceType<typeof JiraApi>;
 
   constructor(config: JiraConfig) {
     if (!config.host) {

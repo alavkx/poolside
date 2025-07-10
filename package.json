@@ -1,6 +1,6 @@
 {
   "name": "poolside-cli",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "CLI tool for automating workflows with productivity tools like JIRA and GitHub - poolside automation",
   "main": "dist/index.js",
   "type": "module",
@@ -14,7 +14,13 @@
     "test:ui": "vitest --ui",
     "format": "biome format --write .",
     "lint": "biome lint .",
-    "check": "biome check ."
+    "check": "biome check .",
+    "prepublishOnly": "npm run build && npm run test && (npm run lint || true)",
+    "publish:patch": "npm version patch && npm publish",
+    "publish:minor": "npm version minor && npm publish",
+    "publish:major": "npm version major && npm publish",
+    "publish:beta": "npm version prerelease --preid=beta && npm publish --tag beta",
+    "release": "npm run prepublishOnly && npm run publish:patch"
   },
   "bin": {
     "poolside": "./dist/index.js"

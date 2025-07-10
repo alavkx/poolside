@@ -182,7 +182,7 @@ function createWorkflowConfig(): WorkflowConfig {
     ai: {
       apiKey: process.env.OPENAI_API_KEY,
       model: process.env.AI_MODEL || "gpt-4o",
-      maxTokens: parseInt(process.env.AI_MAX_TOKENS || "4000"),
+      maxTokens: Number.parseInt(process.env.AI_MAX_TOKENS || "4000"),
     },
     verbose: false,
   };
@@ -337,7 +337,7 @@ program
 
         const workflow = new EpicWorkflow(config);
         await workflow.listEpics(projectKey, {
-          maxResults: parseInt(options.limit),
+          maxResults: Number.parseInt(options.limit),
         });
       } catch (error: any) {
         console.error(chalk.red("❌ Error listing epics:"), error.message);

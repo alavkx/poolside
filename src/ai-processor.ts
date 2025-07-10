@@ -2,8 +2,8 @@ import { openai } from '@ai-sdk/openai';
 import { generateText } from 'ai';
 import ora from 'ora';
 import chalk from 'chalk';
-import { JiraTicket } from './jira-client.js';
-import { GitHubPR } from './github-client.js';
+import type { JiraTicket } from './jira-client.js';
+import type { GitHubPR } from './github-client.js';
 
 export interface AIConfig {
   maxTokens?: number;
@@ -41,7 +41,7 @@ export class AIProcessor {
   private config: Required<AIConfig>;
   public model: any;
 
-  constructor(apiKey: string, verbose: boolean = false, aiConfig: AIConfig = {}) {
+  constructor(apiKey: string, verbose = false, aiConfig: AIConfig = {}) {
     this.verbose = verbose;
 
     if (!apiKey) {

@@ -345,6 +345,61 @@ poolside process-epic PROJ-123 --verbose
 4. Add tests if applicable
 5. Submit a pull request
 
+## Publishing (Maintainers Only)
+
+The package includes several publishing scripts for different scenarios:
+
+### Quick Release (Patch)
+
+For bug fixes and small improvements:
+
+```bash
+npm run release
+```
+
+This will:
+
+- Build the project
+- Run tests
+- Run linting
+- Bump patch version
+- Publish to npm
+
+### Manual Version Control
+
+For more control over versioning:
+
+```bash
+# Patch version (2.1.0 → 2.1.1)
+npm run publish:patch
+
+# Minor version (2.1.0 → 2.2.0)
+npm run publish:minor
+
+# Major version (2.1.0 → 3.0.0)
+npm run publish:major
+
+# Beta release (2.1.0 → 2.1.1-beta.0)
+npm run publish:beta
+```
+
+### Pre-publish Checks
+
+To verify everything is ready for publishing:
+
+```bash
+npm run prepublishOnly
+```
+
+This runs build, tests, and linting without publishing.
+
+### Publishing Requirements
+
+- Must be authenticated with npm (`npm login`)
+- Must have publish permissions for the `poolside-cli` package
+- All tests must pass
+- Code must pass linting
+
 ## License
 
 MIT License - see LICENSE file for details.

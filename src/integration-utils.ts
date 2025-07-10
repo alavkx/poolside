@@ -702,7 +702,7 @@ export class IntegrationUtils {
     ticketKey: string,
     claimantName: string,
     username: string,
-    dryRun: boolean = false
+    dryRun = false
   ): Promise<boolean> {
     if (dryRun) {
       console.log(
