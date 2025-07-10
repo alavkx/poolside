@@ -10,6 +10,20 @@ import { generateMultiRepoReleaseNotes } from "./release-notes-generator.js";
 
 dotenv.config();
 
+// Helper function to get environment variable with namespace support
+function getEnvVar(name: string, fallbackName?: string): string | undefined {
+  // Check namespaced version first (POOLSIDE_*)
+  const namespacedName = `POOLSIDE_${name}`;
+  const namespacedValue = process.env[namespacedName];
+  if (namespacedValue) {
+    return namespacedValue;
+  }
+
+  // Fall back to non-namespaced version for backward compatibility
+  const fallback = fallbackName || name;
+  return process.env[fallback];
+}
+
 interface ValidationResult {
   key: string;
   description: string;
@@ -65,22 +79,67 @@ type RequiredFor = "epic" | "release-notes" | "all";
 
 // Validate environment configuration
 function validateConfig(requiredFor: RequiredFor = "all"): void {
-  const baseVars: Record<string, string> = {
-    OPENAI_API_KEY: "OpenAI API Key",
+  const baseVars: Record<
+    string,
+    { description: string; namespaced: string; legacy: string }
+  > = {
+    OPENAI_API_KEY: {
+      description: "OpenAI API Key",
+      namespaced: "POOLSIDE_OPENAI_API_KEY",
+      legacy: "OPENAI_API_KEY",
+    },
+    AI_MODEL: {
+      description: "AI Model",
+      namespaced: "POOLSIDE_AI_MODEL",
+      legacy: "AI_MODEL",
+    },
+    AI_MAX_TOKENS: {
+      description: "AI Max Tokens",
+      namespaced: "POOLSIDE_AI_MAX_TOKENS",
+      legacy: "AI_MAX_TOKENS",
+    },
   };
 
-  const jiraVars: Record<string, string> = {
-    JIRA_HOST: "JIRA Server Host",
-    JIRA_USERNAME: "JIRA Username",
-    JIRA_PASSWORD: "JIRA Password/Token",
+  const jiraVars: Record<
+    string,
+    { description: string; namespaced: string; legacy: string }
+  > = {
+    JIRA_HOST: {
+      description: "JIRA Server Host",
+      namespaced: "POOLSIDE_JIRA_HOST",
+      legacy: "JIRA_HOST",
+    },
+    JIRA_USERNAME: {
+      description: "JIRA Username",
+      namespaced: "POOLSIDE_JIRA_USERNAME",
+      legacy: "JIRA_USERNAME",
+    },
+    JIRA_PASSWORD: {
+      description: "JIRA Password/Token",
+      namespaced: "POOLSIDE_JIRA_PASSWORD",
+      legacy: "JIRA_PASSWORD",
+    },
   };
 
-  const githubVars: Record<string, string> = {
-    GITHUB_TOKEN: "GitHub Personal Access Token",
+  const githubVars: Record<
+    string,
+    { description: string; namespaced: string; legacy: string }
+  > = {
+    GITHUB_TOKEN: {
+      description: "GitHub Personal Access Token",
+      namespaced: "POOLSIDE_GITHUB_TOKEN",
+      legacy: "GITHUB_TOKEN",
+    },
   };
 
-  let requiredVars: Record<string, string> = { ...baseVars };
-  let optionalVars: Record<string, string> = {};
+  // Only OPENAI_API_KEY is truly required - other vars are conditional
+  let requiredVars = {
+    OPENAI_API_KEY: baseVars.OPENAI_API_KEY,
+  };
+  let optionalVars: typeof baseVars = {
+    AI_MODEL: baseVars.AI_MODEL,
+    AI_MAX_TOKENS: baseVars.AI_MAX_TOKENS,
+  };
 
   if (requiredFor === "epic" || requiredFor === "all") {
     requiredVars = { ...requiredVars, ...jiraVars };
@@ -90,20 +149,32 @@ function validateConfig(requiredFor: RequiredFor = "all"): void {
     optionalVars = { ...optionalVars, ...jiraVars };
   }
 
-  const missing: ValidationResult[] = [];
-  const optional: ValidationResult[] = [];
+  const missing: Array<{
+    key: string;
+    description: string;
+    namespaced: string;
+    legacy: string;
+  }> = [];
+  const optional: Array<{
+    key: string;
+    description: string;
+    namespaced: string;
+    legacy: string;
+  }> = [];
 
   // Check required variables
-  Object.entries(requiredVars).forEach(([key, description]) => {
-    if (!process.env[key]) {
-      missing.push({ key, description });
+  Object.entries(requiredVars).forEach(([key, config]) => {
+    const value = getEnvVar(key, config.legacy);
+    if (!value) {
+      missing.push({ key, ...config });
     }
   });
 
   // Check optional variables
-  Object.entries(optionalVars).forEach(([key, description]) => {
-    if (!process.env[key]) {
-      optional.push({ key, description });
+  Object.entries(optionalVars).forEach(([key, config]) => {
+    const value = getEnvVar(key, config.legacy);
+    if (!value) {
+      optional.push({ key, ...config });
     }
   });
 
@@ -111,9 +182,10 @@ function validateConfig(requiredFor: RequiredFor = "all"): void {
     console.log(chalk.red("\n❌ Missing required configuration:"));
     console.log(chalk.red("══════════════════════════════════\n"));
 
-    missing.forEach(({ key, description }) => {
-      console.log(chalk.red(`• ${key}`));
-      console.log(chalk.gray(`  Description: ${description}`));
+    missing.forEach(({ key, description, namespaced, legacy }) => {
+      console.log(chalk.red(`• ${description}`));
+      console.log(chalk.cyan(`  Preferred: ${namespaced}=your_value_here`));
+      console.log(chalk.gray(`  Legacy:    ${legacy}=your_value_here`));
       console.log("");
     });
 
@@ -125,12 +197,12 @@ function validateConfig(requiredFor: RequiredFor = "all"): void {
 
     console.log(
       chalk.white(
-        "2. Edit .env and add your credentials for these variables:\n"
+        "2. Edit .env and add your credentials using the preferred namespaced variables:\n"
       )
     );
 
-    missing.forEach(({ key, description }) => {
-      console.log(chalk.cyan(`   ${key}=your_${key.toLowerCase()}_here`));
+    missing.forEach(({ namespaced }) => {
+      console.log(chalk.cyan(`   ${namespaced}=your_value_here`));
     });
 
     console.log("\n" + chalk.white("3. Get your credentials:"));
@@ -150,6 +222,13 @@ function validateConfig(requiredFor: RequiredFor = "all"): void {
 
     console.log(
       "\n" +
+        chalk.blue(
+          "💡 Note: Legacy environment variable names are still supported for backward compatibility."
+        )
+    );
+
+    console.log(
+      "\n" +
         chalk.white("For detailed setup instructions, see the README.md file.")
     );
 
@@ -158,8 +237,10 @@ function validateConfig(requiredFor: RequiredFor = "all"): void {
 
   if (optional.length > 0) {
     console.log(chalk.yellow("\n⚠️  Optional integrations not configured:"));
-    optional.forEach(({ key, description }) => {
-      console.log(chalk.gray(`   • ${key} - ${description}`));
+    optional.forEach(({ description, namespaced, legacy }) => {
+      console.log(chalk.gray(`   • ${description}`));
+      console.log(chalk.gray(`     Preferred: ${namespaced}`));
+      console.log(chalk.gray(`     Legacy: ${legacy}`));
     });
     console.log(
       chalk.gray(
@@ -172,17 +253,17 @@ function validateConfig(requiredFor: RequiredFor = "all"): void {
 function createWorkflowConfig(): WorkflowConfig {
   return {
     jira: {
-      host: process.env.JIRA_HOST?.replace(/^https?:\/\//, ""),
-      username: process.env.JIRA_USERNAME,
-      password: process.env.JIRA_PASSWORD,
+      host: getEnvVar("JIRA_HOST")?.replace(/^https?:\/\//, ""),
+      username: getEnvVar("JIRA_USERNAME"),
+      password: getEnvVar("JIRA_PASSWORD"),
     },
     github: {
-      token: process.env.GITHUB_TOKEN,
+      token: getEnvVar("GITHUB_TOKEN"),
     },
     ai: {
-      apiKey: process.env.OPENAI_API_KEY,
-      model: process.env.AI_MODEL || "gpt-4o",
-      maxTokens: Number.parseInt(process.env.AI_MAX_TOKENS || "4000"),
+      apiKey: getEnvVar("OPENAI_API_KEY"),
+      model: getEnvVar("AI_MODEL") || "gpt-4o",
+      maxTokens: Number.parseInt(getEnvVar("AI_MAX_TOKENS") || "4000"),
     },
     verbose: false,
   };
@@ -1023,37 +1104,94 @@ program
     console.log(chalk.blue("🔧 Checking configuration...\n"));
 
     const vars = [
-      { key: "OPENAI_API_KEY", required: true },
-      { key: "JIRA_HOST", required: false },
-      { key: "JIRA_USERNAME", required: false },
-      { key: "JIRA_PASSWORD", required: false },
-      { key: "GITHUB_TOKEN", required: false },
+      {
+        name: "OpenAI API Key",
+        namespaced: "POOLSIDE_OPENAI_API_KEY",
+        legacy: "OPENAI_API_KEY",
+        required: true,
+      },
+      {
+        name: "AI Model",
+        namespaced: "POOLSIDE_AI_MODEL",
+        legacy: "AI_MODEL",
+        required: false,
+      },
+      {
+        name: "AI Max Tokens",
+        namespaced: "POOLSIDE_AI_MAX_TOKENS",
+        legacy: "AI_MAX_TOKENS",
+        required: false,
+      },
+      {
+        name: "JIRA Host",
+        namespaced: "POOLSIDE_JIRA_HOST",
+        legacy: "JIRA_HOST",
+        required: false,
+      },
+      {
+        name: "JIRA Username",
+        namespaced: "POOLSIDE_JIRA_USERNAME",
+        legacy: "JIRA_USERNAME",
+        required: false,
+      },
+      {
+        name: "JIRA Password",
+        namespaced: "POOLSIDE_JIRA_PASSWORD",
+        legacy: "JIRA_PASSWORD",
+        required: false,
+      },
+      {
+        name: "GitHub Token",
+        namespaced: "POOLSIDE_GITHUB_TOKEN",
+        legacy: "GITHUB_TOKEN",
+        required: false,
+      },
     ];
 
-    vars.forEach(({ key, required }) => {
-      const value = process.env[key];
-      const status = value ? "✅" : required ? "❌" : "⚠️";
-      const display = value ? `${value.substring(0, 8)}...` : "Not set";
+    vars.forEach(({ name, namespaced, legacy, required }) => {
+      const namespacedValue = process.env[namespaced];
+      const legacyValue = process.env[legacy];
+      const effectiveValue = namespacedValue || legacyValue;
+
+      const status = effectiveValue ? "✅" : required ? "❌" : "⚠️";
+      const display = effectiveValue
+        ? `${effectiveValue.substring(0, 8)}...`
+        : "Not set";
       const label = required ? "Required" : "Optional";
 
-      console.log(`${status} ${key}: ${display} (${label})`);
+      console.log(`${status} ${name}: ${display} (${label})`);
+
+      if (effectiveValue) {
+        if (namespacedValue) {
+          console.log(chalk.gray(`    Source: ${namespaced}`));
+        } else {
+          console.log(chalk.gray(`    Source: ${legacy} (legacy)`));
+        }
+      } else {
+        console.log(chalk.gray(`    Missing: ${namespaced} or ${legacy}`));
+      }
+      console.log();
     });
 
     console.log(
-      "\n" +
-        chalk.gray(
-          "Note: Only the first 8 characters of tokens are shown for security."
-        )
+      chalk.gray(
+        "Note: Only the first 8 characters of tokens are shown for security."
+      )
+    );
+    console.log(
+      chalk.blue(
+        "\n💡 Tip: Use namespaced variables (POOLSIDE_*) to avoid conflicts with other tools."
+      )
     );
     console.log(chalk.blue("\nWorkflow Requirements:"));
     console.log(
       chalk.gray(
-        "• Epic Automation: Requires OPENAI_API_KEY, JIRA_HOST, JIRA_USERNAME, JIRA_PASSWORD"
+        "• Epic Automation: Requires OpenAI API Key, JIRA Host, JIRA Username, JIRA Password"
       )
     );
     console.log(
       chalk.gray(
-        "• Release Notes: Requires OPENAI_API_KEY, GITHUB_TOKEN (JIRA optional)"
+        "• Release Notes: Requires OpenAI API Key, GitHub Token (JIRA optional)"
       )
     );
   });
