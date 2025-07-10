@@ -33,17 +33,17 @@ npx poolside-cli --help
 2. **Edit the `.env` file** with your credentials:
 
    ```bash
-   # OpenAI Configuration (Required) - Namespaced to avoid conflicts
+   # OpenAI Configuration (Required)
    POOLSIDE_OPENAI_API_KEY=your_openai_api_key_here
    POOLSIDE_AI_MODEL=gpt-4o
    POOLSIDE_AI_MAX_TOKENS=4000
 
-   # JIRA Configuration (Required for epic automation) - Namespaced to avoid conflicts
+   # JIRA Configuration (Required for epic automation)
    POOLSIDE_JIRA_HOST=your-company.atlassian.net
    POOLSIDE_JIRA_USERNAME=your_jira_username
    POOLSIDE_JIRA_PASSWORD=your_jira_password_or_pat
 
-   # GitHub Configuration (Optional) - Namespaced to avoid conflicts
+   # GitHub Configuration (Optional)
    POOLSIDE_GITHUB_TOKEN=your_github_token_here
    ```
 
@@ -57,8 +57,6 @@ npx poolside-cli --help
    ```bash
    poolside process-epic PROJ-123
    ```
-
-````
 
 ## Core Workflow
 
@@ -82,7 +80,7 @@ Process a JIRA epic to claim the next available ticket and generate a coding pro
 
 ```bash
 poolside process-epic PROJ-123 --agent "Cursor Agent" --claimant "Developer Bot"
-````
+```
 
 **Options:**
 
@@ -178,11 +176,7 @@ Test connections to JIRA, GitHub, and OpenAI.
 poolside test-connections --verbose
 ```
 
-## Configuration
-
 ### Environment Variables
-
-**Namespaced Variables (Recommended):**
 
 | Variable                  | Required | Description                                        |
 | ------------------------- | -------- | -------------------------------------------------- |
@@ -194,30 +188,7 @@ poolside test-connections --verbose
 | `POOLSIDE_AI_MODEL`       | No       | OpenAI model to use (default: gpt-4o)              |
 | `POOLSIDE_AI_MAX_TOKENS`  | No       | Maximum tokens for AI responses (default: 4000)    |
 
-**Legacy Variables (Still Supported):**
-
-| Variable         | Required | Description                                        |
-| ---------------- | -------- | -------------------------------------------------- |
-| `OPENAI_API_KEY` | Yes      | OpenAI API key for generating coding prompts       |
-| `JIRA_HOST`      | Yes\*    | JIRA server hostname (without https://)            |
-| `JIRA_USERNAME`  | Yes\*    | JIRA username                                      |
-| `JIRA_PASSWORD`  | Yes\*    | JIRA password or Personal Access Token             |
-| `GITHUB_TOKEN`   | No       | GitHub Personal Access Token for enhanced features |
-| `AI_MODEL`       | No       | OpenAI model to use (default: gpt-4o)              |
-| `AI_MAX_TOKENS`  | No       | Maximum tokens for AI responses (default: 4000)    |
-
 \*Required for epic automation workflows
-
-> **💡 Tip:** Use namespaced variables (`POOLSIDE_*`) to avoid conflicts with other tools. Namespaced variables take precedence if both are set.
-
-### JIRA Authentication
-
-The tool supports both username/password and Personal Access Token (PAT) authentication:
-
-- **Username/Password**: Traditional JIRA authentication
-- **Personal Access Token**: More secure, use `setup-jira-pat` command to configure
-
-For Atlassian Cloud instances, PAT authentication is recommended for better security.
 
 ## Example Usage
 
