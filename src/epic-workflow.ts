@@ -128,7 +128,7 @@ export class EpicWorkflow {
       if (!availableTicket) {
         console.log(
           chalk.yellow(
-            "⚠️  No available tickets found (all tickets are in progress or assigned)"
+            "⚠️  No ready tickets found (only tickets with 'ready' status are eligible)"
           )
         );
         return null;
@@ -136,7 +136,7 @@ export class EpicWorkflow {
 
       console.log(
         chalk.green(
-          `✅ Found available ticket: ${availableTicket.key} - ${availableTicket.summary}`
+          `✅ Found ready ticket: ${availableTicket.key} - ${availableTicket.summary}`
         )
       );
 
@@ -358,7 +358,7 @@ export class EpicWorkflow {
         return acc;
       }, {} as Record<string, number>);
 
-      const availableTickets = childTickets.filter(
+      const readyTickets = childTickets.filter(
         (ticket) => this.utils.findAvailableTicket([ticket]) !== null
       );
 
@@ -372,7 +372,7 @@ export class EpicWorkflow {
       );
       console.log(`Epic Status: ${epic.status}`);
       console.log(`Total Child Tickets: ${childTickets.length}`);
-      console.log(`Available Tickets: ${availableTickets.length}`);
+      console.log(`Ready Tickets: ${readyTickets.length}`);
       console.log(`In Progress Tickets: ${inProgressTickets.length}`);
 
       console.log("\n📊 Status Breakdown:");
@@ -380,8 +380,8 @@ export class EpicWorkflow {
         console.log(`  ${status}: ${count}`);
       });
 
-      if (availableTickets.length > 0) {
-        console.log(chalk.green("\n🎯 Next Available Ticket:"));
+      if (readyTickets.length > 0) {
+        console.log(chalk.green("\n🎯 Next Ready Ticket:"));
         const nextTicket = this.utils.findAvailableTicket(childTickets);
         if (nextTicket) {
           console.log(`  ${nextTicket.key} - ${nextTicket.summary}`);
@@ -394,7 +394,7 @@ export class EpicWorkflow {
         epic,
         childTickets,
         statusSummary,
-        availableCount: availableTickets.length,
+        availableCount: readyTickets.length,
         inProgressCount: inProgressTickets.length,
       };
     } catch (error: any) {

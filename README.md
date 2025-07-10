@@ -64,10 +64,7 @@ The main workflow (`process-epic`) performs the following steps:
 
 1. **Find the Epic**: Searches for the specified JIRA epic
 2. **Get Child Tickets**: Retrieves all tickets linked to the epic
-3. **Find Available Ticket**: Identifies the first unclaimed ticket that:
-   - Has no assignee
-   - Is not in progress (status)
-   - Has no "claimed" comments
+3. **Find Ready Ticket**: Identifies the first ticket with "ready" status (exclusively)
 4. **Claim the Ticket**: Adds a comment marking the ticket as claimed
 5. **Generate Coding Prompt**: Uses AI to create a comprehensive coding prompt
 6. **Save and Output**: Saves the prompt to a temp file and outputs to stdout
@@ -307,11 +304,11 @@ try {
    - Ensure you have access to the project
    - Check if the issue type is actually "Epic"
 
-3. **No Available Tickets**
+3. **No Ready Tickets**
 
-   - All tickets may be assigned or in progress
+   - No tickets with "ready" status found
    - Use `epic-status` command to check ticket statuses
-   - Verify the epic has child tickets
+   - Verify the epic has child tickets with "ready" status
 
 4. **AI Generation Failures**
    - Check OpenAI API key and billing

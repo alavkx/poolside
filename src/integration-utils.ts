@@ -278,69 +278,12 @@ export class IntegrationUtils {
   }
 
   findAvailableTicket(childTickets: Ticket[]): Ticket | null {
-    // Find the first ticket that doesn't have "in progress" indicators or closed status
-    const inProgressStatuses = [
-      "In Progress",
-      "In Development",
-      "In Review",
-      "Testing",
-      "Review",
-      "Code Review",
-    ];
-    const closedStatuses = [
-      "Closed",
-      "Done",
-      "Resolved",
-      "Complete",
-      "Completed",
-      "Cancelled",
-      "Rejected",
-    ];
-    const inProgressKeywords = [
-      "claimed",
-      "working on",
-      "in progress",
-      "started",
-      "assigned",
-    ];
-
+    // Find the first ticket that has "ready" status exclusively
     for (const ticket of childTickets) {
-      // Check if status indicates closed/resolved
-      if (
-        closedStatuses.some((status) =>
-          ticket.status.toLowerCase().includes(status.toLowerCase())
-        )
-      ) {
-        continue;
+      // Only return tickets with "ready" status (case-insensitive)
+      if (ticket.status.toLowerCase() === "ready") {
+        return ticket;
       }
-
-      // Check if status indicates in progress
-      if (
-        inProgressStatuses.some((status) =>
-          ticket.status.toLowerCase().includes(status.toLowerCase())
-        )
-      ) {
-        continue;
-      }
-
-      // Check if assignee exists
-      if (ticket.assignee) {
-        continue;
-      }
-
-      // Check comments for in-progress keywords
-      const hasInProgressComment = ticket.comments.some((comment) =>
-        inProgressKeywords.some((keyword) =>
-          comment.body.toLowerCase().includes(keyword)
-        )
-      );
-
-      if (hasInProgressComment) {
-        continue;
-      }
-
-      // This ticket appears to be available
-      return ticket;
     }
 
     return null;
