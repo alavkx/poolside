@@ -556,50 +556,334 @@ program
     }
   });
 
+// Helper function to parse existing .env file
+async function parseEnvFile(
+  filePath: string
+): Promise<Record<string, string | undefined>> {
+  try {
+    const content = await fs.readFile(filePath, "utf8");
+    const env: Record<string, string | undefined> = {};
+
+    // Parse .env file content
+    const lines = content.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#")) {
+        const [key, ...valueParts] = trimmed.split("=");
+        if (key && valueParts.length > 0) {
+          env[key.trim()] = valueParts.join("=").trim();
+        }
+      }
+    }
+
+    return env;
+  } catch (error) {
+    return {};
+  }
+}
+
+// Helper function to check configuration completeness
+function analyzeConfiguration(envVars: Record<string, string | undefined>): {
+  hasOpenAI: boolean;
+  hasJira: boolean;
+  hasGitHub: boolean;
+  missing: string[];
+  configured: string[];
+} {
+  const requiredVars = [
+    "OPENAI_API_KEY",
+    "JIRA_HOST",
+    "JIRA_USERNAME",
+    "JIRA_PASSWORD",
+  ];
+  const optionalVars = ["GITHUB_TOKEN", "AI_MODEL", "AI_MAX_TOKENS"];
+
+  const hasOpenAI =
+    !!envVars.OPENAI_API_KEY &&
+    envVars.OPENAI_API_KEY !== "your_openai_api_key_here";
+  const hasJira =
+    !!(envVars.JIRA_HOST && envVars.JIRA_USERNAME && envVars.JIRA_PASSWORD) &&
+    envVars.JIRA_HOST !== "your-company.atlassian.net" &&
+    envVars.JIRA_USERNAME !== "your_jira_username" &&
+    envVars.JIRA_PASSWORD !== "your_jira_password_or_pat";
+  const hasGitHub =
+    !!envVars.GITHUB_TOKEN && envVars.GITHUB_TOKEN !== "your_github_token_here";
+
+  const missing: string[] = [];
+  const configured: string[] = [];
+
+  requiredVars.forEach((key) => {
+    if (envVars[key] && !envVars[key]?.startsWith("your_")) {
+      configured.push(key);
+    } else {
+      missing.push(key);
+    }
+  });
+
+  optionalVars.forEach((key) => {
+    if (envVars[key] && !envVars[key]?.startsWith("your_")) {
+      configured.push(key);
+    }
+  });
+
+  return { hasOpenAI, hasJira, hasGitHub, missing, configured };
+}
+
+// Helper function to update .env file with missing variables
+async function updateEnvFile(
+  filePath: string,
+  updates: Record<string, string>
+): Promise<void> {
+  let content = "";
+
+  try {
+    content = await fs.readFile(filePath, "utf8");
+  } catch (error) {
+    // File doesn't exist, start with empty content
+    content =
+      "# Poolside CLI Configuration\n# Edit this file to add your credentials\n\n";
+  }
+
+  // Add missing variables
+  for (const [key, value] of Object.entries(updates)) {
+    if (content.includes(`${key}=`)) {
+      // Replace existing value
+      content = content.replace(
+        new RegExp(`${key}=.*$`, "m"),
+        `${key}=${value}`
+      );
+    } else {
+      // Add new variable
+      content += `${key}=${value}\n`;
+    }
+  }
+
+  await fs.writeFile(filePath, content);
+}
+
 program
   .command("init-env")
   .description("Initialize environment configuration file")
   .option("-o, --output <file>", "Output env file path", ".env")
-  .action(async (options: { output: string }) => {
+  .option("--force", "Force overwrite existing file")
+  .action(async (options: { output: string; force?: boolean }) => {
     try {
+      const envFile = options.output;
       const examplePath = path.join(process.cwd(), "env.example");
+
+      // Check if .env file already exists
+      let envExists = false;
+      try {
+        await fs.access(envFile);
+        envExists = true;
+      } catch {
+        envExists = false;
+      }
+
+      if (envExists && !options.force) {
+        console.log(
+          chalk.blue(
+            "🔍 Found existing environment file, analyzing configuration..."
+          )
+        );
+
+        // Parse existing .env file
+        const existingEnv = await parseEnvFile(envFile);
+        const analysis = analyzeConfiguration(existingEnv);
+
+        console.log(chalk.blue("\n📊 Configuration Analysis:"));
+        console.log(chalk.gray("═══════════════════════════"));
+
+        if (analysis.configured.length > 0) {
+          console.log(
+            chalk.green(
+              `✅ Configured variables (${analysis.configured.length}):`
+            )
+          );
+          analysis.configured.forEach((key) => {
+            const value = existingEnv[key];
+            const display = value ? `${value.substring(0, 8)}...` : "Set";
+            console.log(chalk.gray(`   • ${key}: ${display}`));
+          });
+        }
+
+        if (analysis.missing.length > 0) {
+          console.log(
+            chalk.yellow(
+              `\n⚠️  Missing variables (${analysis.missing.length}):`
+            )
+          );
+          analysis.missing.forEach((key) => {
+            console.log(chalk.gray(`   • ${key}`));
+          });
+        }
+
+        // Determine setup status
+        const isWellConfigured =
+          analysis.hasOpenAI && (analysis.hasJira || analysis.hasGitHub);
+
+        if (isWellConfigured) {
+          console.log(
+            chalk.green("\n🎉 Your environment is already well-configured!")
+          );
+          console.log(chalk.blue("🔧 Capabilities detected:"));
+          if (analysis.hasOpenAI)
+            console.log(chalk.gray("   • AI-powered features (OpenAI)"));
+          if (analysis.hasJira)
+            console.log(chalk.gray("   • JIRA epic automation"));
+          if (analysis.hasGitHub)
+            console.log(chalk.gray("   • GitHub release notes"));
+
+          console.log(
+            chalk.yellow(
+              "\n💡 Use 'poolside check-config' to verify your configuration"
+            )
+          );
+          console.log(
+            chalk.gray(
+              "   Use 'poolside init-env --force' to recreate the file"
+            )
+          );
+          return;
+        }
+
+        if (analysis.missing.length > 0) {
+          console.log(chalk.blue("\n🔧 Setup recommendations:"));
+          console.log(chalk.gray("═══════════════════════════"));
+
+          if (analysis.missing.includes("OPENAI_API_KEY")) {
+            console.log(chalk.yellow("🤖 OpenAI API Key (Required):"));
+            console.log(
+              chalk.gray("   Get from: https://platform.openai.com/api-keys")
+            );
+            console.log(
+              chalk.gray("   Add to .env: OPENAI_API_KEY=sk-your_key_here")
+            );
+          }
+
+          if (analysis.missing.some((k) => k.startsWith("JIRA_"))) {
+            console.log(
+              chalk.yellow("\n🎫 JIRA Configuration (For epic automation):")
+            );
+            console.log(chalk.gray("   JIRA_HOST: your-company.atlassian.net"));
+            console.log(chalk.gray("   JIRA_USERNAME: your_username"));
+            console.log(chalk.gray("   JIRA_PASSWORD: your_password_or_pat"));
+            console.log(
+              chalk.gray(
+                "   Use 'poolside setup-jira-pat' for secure PAT setup"
+              )
+            );
+          }
+
+          if (analysis.missing.includes("GITHUB_TOKEN")) {
+            console.log(chalk.yellow("\n🐙 GitHub Token (For release notes):"));
+            console.log(
+              chalk.gray("   Get from: https://github.com/settings/tokens")
+            );
+            console.log(chalk.gray("   Permissions: repo, read:org"));
+            console.log(
+              chalk.gray("   Add to .env: GITHUB_TOKEN=ghp_your_token_here")
+            );
+          }
+
+          console.log(chalk.blue("\n📝 Next steps:"));
+          console.log(
+            chalk.gray("1. Edit your .env file to add the missing credentials")
+          );
+          console.log(chalk.gray("2. Run 'poolside check-config' to verify"));
+          console.log(chalk.gray("3. Run 'poolside test-connections' to test"));
+
+          return;
+        }
+
+        console.log(
+          chalk.yellow(
+            "\n⚠️  Configuration incomplete - some variables need proper values"
+          )
+        );
+        console.log(
+          chalk.gray(
+            "Edit your .env file to replace placeholder values with real credentials"
+          )
+        );
+        return;
+      }
+
+      // Create new .env file (either doesn't exist or --force was used)
+      if (options.force && envExists) {
+        console.log(
+          chalk.yellow("⚠️  Overwriting existing environment file...")
+        );
+      } else {
+        console.log(chalk.blue("🆕 Creating new environment file..."));
+      }
 
       try {
         await fs.access(examplePath);
-        await fs.copyFile(examplePath, options.output);
-        console.log(
-          chalk.green(`✅ Environment template created: ${options.output}`)
-        );
-        console.log(
-          chalk.yellow("📝 Edit the environment file to add your credentials.")
-        );
+        await fs.copyFile(examplePath, envFile);
+        console.log(chalk.green(`✅ Environment template created: ${envFile}`));
       } catch {
         // If example doesn't exist, create a minimal env file
         const minimalEnv = `# Poolside CLI Configuration
-# Copy this file to .env and fill in your credentials
+# Edit this file to add your credentials
 
+# ================================
 # OpenAI Configuration (Required)
+# ================================
 OPENAI_API_KEY=your_openai_api_key_here
 AI_MODEL=gpt-4o
 AI_MAX_TOKENS=4000
 
+# ================================
 # JIRA Configuration (Required for Epic Automation)
+# ================================
 JIRA_HOST=your-company.atlassian.net
 JIRA_USERNAME=your_jira_username
 JIRA_PASSWORD=your_jira_password_or_pat
 
+# ================================
 # GitHub Configuration (Required for Release Notes)
+# ================================
 GITHUB_TOKEN=your_github_token_here
 `;
 
-        await fs.writeFile(options.output, minimalEnv);
-        console.log(
-          chalk.green(`✅ Environment template created: ${options.output}`)
-        );
-        console.log(
-          chalk.yellow("📝 Edit the environment file to add your credentials.")
-        );
+        await fs.writeFile(envFile, minimalEnv);
+        console.log(chalk.green(`✅ Environment template created: ${envFile}`));
       }
+
+      console.log(chalk.blue("\n🚀 Quick Setup Guide:"));
+      console.log(chalk.gray("═══════════════════════"));
+      console.log(chalk.yellow("1. Get your OpenAI API key:"));
+      console.log(
+        chalk.gray("   • Visit: https://platform.openai.com/api-keys")
+      );
+      console.log(chalk.gray("   • Create a new secret key"));
+      console.log(
+        chalk.gray("   • Replace 'your_openai_api_key_here' in .env")
+      );
+
+      console.log(chalk.yellow("\n2. For JIRA epic automation:"));
+      console.log(
+        chalk.gray(
+          "   • Replace JIRA_HOST with your server (e.g., company.atlassian.net)"
+        )
+      );
+      console.log(chalk.gray("   • Add your JIRA username and password"));
+      console.log(
+        chalk.gray("   • Or run 'poolside setup-jira-pat' for secure PAT setup")
+      );
+
+      console.log(chalk.yellow("\n3. For GitHub release notes:"));
+      console.log(chalk.gray("   • Visit: https://github.com/settings/tokens"));
+      console.log(
+        chalk.gray("   • Create token with 'repo' and 'read:org' permissions")
+      );
+      console.log(chalk.gray("   • Replace 'your_github_token_here' in .env"));
+
+      console.log(chalk.blue("\n📋 Next steps:"));
+      console.log(chalk.gray("• Edit .env file with your credentials"));
+      console.log(chalk.gray("• Run 'poolside check-config' to verify setup"));
+      console.log(chalk.gray("• Run 'poolside test-connections' to test"));
     } catch (error: any) {
       console.error(
         chalk.red("❌ Error creating environment file:"),
