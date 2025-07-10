@@ -51,6 +51,14 @@
     "poolside",
     "productivity"
   ],
-  "author": "",
-  "license": "MIT"
+  "author": "@alavkx",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/poolside/poolside-cli.git"
+  },
+  "homepage": "https://github.com/poolside/poolside-cli#readme",
+  "bugs": {
+    "url": "https://github.com/poolside/poolside-cli/issues"
+  }
 }
