@@ -1,342 +1,329 @@
-# Release Notes Generator
+# Poolside CLI
 
-A powerful tool to generate customer-focused release notes from GitHub PRs and JIRA tickets across multiple repositories. Features AI-powered content generation, comprehensive progress tracking, and structured markdown output with table of contents.
+A CLI tool for automating workflows with productivity tools like JIRA and GitHub, designed specifically for coding agents and AI assistants.
 
-## ✨ Features
+## Features
 
-- **Multi-Repository Support**: Generate consolidated release notes across multiple repositories
-- **Configuration-Driven**: Use JSON config files to define repositories, categories, and settings
-- **AI-Powered Content**: Transform technical changes into customer-focused release notes
-- **Progress Tracking**: Real-time feedback showing processing progress across all repositories
-- **JIRA Integration**: Automatically link and include JIRA ticket information
-- **Structured Output**: Generate release notes with table of contents, summaries, and statistics
-- **Flexible Categorization**: Customize how changes are categorized per repository
-- **Enhanced Token Limits**: Support for larger models and increased processing capacity
+- **Epic Processing**: Automatically find and claim the next available ticket from a JIRA epic
+- **AI-Generated Prompts**: Create comprehensive coding prompts for development agents
+- **JIRA Integration**: Full support for JIRA APIs with Personal Access Token (PAT) authentication
+- **GitHub Integration**: Connect to GitHub repositories for enhanced context
+- **Agent-Friendly**: Designed for automated workflows and agent interactions
 
-## 🚀 Quick Start
-
-### 1. Installation
+## Installation
 
 ```bash
-git clone <repository-url>
-cd release-notes-generator
-npm install
+npm install -g poolside-cli
 ```
 
-### 2. Environment Setup
-
-Copy the example environment file and configure your credentials:
+Or run directly with npx:
 
 ```bash
-cp env.example .env
+npx poolside-cli --help
 ```
 
-Edit `.env` with your credentials:
+## Quick Start
 
-```env
-# Required
-GITHUB_TOKEN=ghp_your_github_token_here
-OPENAI_API_KEY=sk-your_openai_api_key_here
-
-# Optional (for JIRA integration)
-JIRA_HOST=your-company.atlassian.net
-JIRA_USERNAME=your-email@company.com
-JIRA_PASSWORD=your_jira_token_or_password
-```
-
-### 3. Create Configuration
-
-Initialize a configuration file:
-
-```bash
-npm start init-config -o my-config.json
-```
-
-Or copy the example:
-
-```bash
-cp config.example.json my-config.json
-```
-
-### 4. Configure Repositories
-
-Edit `my-config.json` to define your repositories:
-
-```json
-{
-  "releaseConfig": {
-    "month": "2024-01",
-    "outputFile": "release-notes.md",
-    "title": "Platform Release Notes",
-    "description": "Comprehensive updates across all our products",
-    "includeTableOfContents": true,
-    "includeSummary": true
-  },
-  "aiConfig": {
-    "maxTokens": 8000,
-    "batchSize": 3,
-    "model": "gpt-4o"
-  },
-  "repositories": [
-    {
-      "name": "Core API",
-      "repo": "company/core-api",
-      "description": "Backend services and APIs",
-      "priority": 1,
-      "includeInSummary": true,
-      "categories": {
-        "features": "New API Endpoints & Capabilities",
-        "improvements": "Performance & Reliability Updates",
-        "bugs": "Critical Fixes & Stability"
-      }
-    }
-  ]
-}
-```
-
-### 5. Generate Release Notes
-
-```bash
-npm start generate -c my-config.json
-```
-
-## 📋 Configuration Reference
-
-### Release Configuration
-
-```json
-{
-  "releaseConfig": {
-    "month": "2024-01", // Target month (YYYY-MM)
-    "outputFile": "release-notes.md", // Output file path
-    "title": "Release Notes", // Main title
-    "description": "Release description", // Subtitle/description
-    "includeTableOfContents": true, // Generate TOC
-    "includeSummary": true // Include executive summary
-  }
-}
-```
-
-### AI Configuration
-
-```json
-{
-  "aiConfig": {
-    "maxTokens": 8000, // Token limit per request
-    "batchSize": 3, // PRs processed per batch
-    "model": "gpt-4o" // OpenAI model to use
-  }
-}
-```
-
-**Recommended Models:**
-
-- `gpt-4o`: Best quality, higher cost
-- `gpt-4o-mini`: Good balance of quality and cost
-- `gpt-3.5-turbo`: Faster, lower cost
-
-### Repository Configuration
-
-```json
-{
-  "name": "Display Name", // Human-readable name
-  "repo": "owner/repository", // GitHub repository
-  "description": "Repository description", // Optional description
-  "priority": 1, // Display order (lower = first)
-  "includeInSummary": true, // Include in executive summary
-  "categories": {
-    // Custom category titles
-    "features": "New Features",
-    "improvements": "Enhancements",
-    "bugs": "Bug Fixes"
-  }
-}
-```
-
-### JIRA Configuration
-
-```json
-{
-  "jiraConfig": {
-    "enabled": true, // Enable JIRA integration
-    "baseUrl": "https://company.atlassian.net", // Override env var
-    "priorityMapping": {
-      // Priority emoji mapping
-      "Critical": "🔴",
-      "High": "🟠",
-      "Medium": "🟡",
-      "Low": "🟢"
-    }
-  }
-}
-```
-
-## 🔧 Command Line Interface
-
-### Primary Commands
-
-```bash
-# Generate multi-repo release notes
-npm start generate -c config.json
-
-# Override configuration options
-npm start generate -c config.json -m 2024-02 -o february-notes.md
-
-# Enable verbose logging for debugging
-npm start generate -c config.json --verbose
-```
-
-### Utility Commands
-
-```bash
-# Check environment configuration
-npm start check-config
-
-# Initialize new configuration file
-npm start init-config -o my-config.json
-
-# Set up JIRA Personal Access Token
-npm start setup-jira-pat
-
-# Generate single repository (legacy mode)
-npm start generate-single -r owner/repo -m 2024-01
-```
-
-## 📊 Output Structure
-
-The generated release notes include:
-
-1. **Header**: Title, date, and overview statistics
-2. **Executive Summary**: High-level highlights across all repositories
-3. **Table of Contents**: Navigation links to all sections
-4. **Repository Sections**: Detailed changes organized by repository and category
-5. **Statistics**: Processing metrics and breakdown tables
-
-### Example Output Structure
-
-```markdown
-# Platform Release Notes - January 2024
-
-**Release Date:** February 1st, 2024
-**Repositories:** 4
-**Total Changes:** 47 pull requests
-
-## 🎯 This Month's Highlights
-
-We're excited to share 12 new features and capabilities, 18 enhancements and optimizations, 8 fixes and stability improvements designed to improve your experience.
-
-## 📚 Table of Contents
-
-- [🎯 This Month's Highlights](#-this-months-highlights)
-- [📦 Core API](#-core-api)
-  - [✨ New Features](#-new-features)
-  - [🚀 Improvements](#-improvements)
-
-## 📦 Core API
-
-Backend services and APIs • **15** pull requests processed • **8** JIRA tickets linked
-
-### ✨ New API Endpoints & Capabilities
-
-New functionality and capabilities:
-
-- Enhanced user authentication with multi-factor support
-- New GraphQL endpoints for real-time data queries
-```
-
-## 🔄 Migration from Single-Repo
-
-If you're currently using the single-repository mode:
-
-1. **Create a configuration file**:
+1. **Initialize environment configuration:**
 
    ```bash
-   npm start init-config -o config.json
+   poolside init-env
    ```
 
-2. **Update the repositories section** with your current repo:
-
-   ```json
-   {
-     "repositories": [
-       {
-         "name": "My Project",
-         "repo": "owner/repository",
-         "priority": 1,
-         "includeInSummary": true
-       }
-     ]
-   }
-   ```
-
-3. **Switch to the new command**:
+2. **Edit the `.env` file** with your credentials:
 
    ```bash
-   # Old way
-   npm start generate-single -r owner/repo
+   # OpenAI Configuration (Required)
+   POOLSIDE_OPENAI_API_KEY=your_openai_api_key_here
+   POOLSIDE_AI_MODEL=gpt-4o
+   POOLSIDE_AI_MAX_TOKENS=4000
 
-   # New way
-   npm start generate -c config.json
+   # JIRA Configuration (Required for epic automation)
+   POOLSIDE_JIRA_HOST=your-company.atlassian.net
+   POOLSIDE_JIRA_USERNAME=your_jira_username
+   POOLSIDE_JIRA_PASSWORD=your_jira_password_or_pat
+
+   # GitHub Configuration (Optional)
+   POOLSIDE_GITHUB_TOKEN=your_github_token_here
    ```
 
-The legacy `generate-single` command will continue to work for backward compatibility.
+3. **Test your connections:**
 
-## 🐛 Troubleshooting
+   ```bash
+   poolside test-connections
+   ```
+
+4. **Process an epic:**
+   ```bash
+   poolside process-epic PROJ-123
+   ```
+
+## Core Workflow
+
+The main workflow (`process-epic`) performs the following steps:
+
+1. **Find the Epic**: Searches for the specified JIRA epic
+2. **Get Child Tickets**: Retrieves all tickets linked to the epic
+3. **Find Ready Ticket**: Identifies the first ticket with "ready" status (exclusively)
+4. **Claim the Ticket**: Adds a comment marking the ticket as claimed
+5. **Generate Coding Prompt**: Uses AI to create a comprehensive coding prompt
+6. **Save and Output**: Saves the prompt to a temp file and outputs to stdout
+
+## Commands
+
+### `process-epic <epic-id>`
+
+Process a JIRA epic to claim the next available ticket and generate a coding prompt.
+
+```bash
+poolside process-epic PROJ-123 --agent "Cursor Agent" --claimant "Developer Bot"
+```
+
+**Options:**
+
+- `-a, --agent <name>`: Name of the agent claiming the ticket (default: "Coding Agent")
+- `-c, --claimant <name>`: Name to use when claiming the ticket (defaults to agent name)
+- `--verbose`: Enable verbose logging for debugging
+
+### `list-epics <project-key>`
+
+List all epics for a JIRA project.
+
+```bash
+poolside list-epics PROJ --limit 10
+```
+
+**Options:**
+
+- `-l, --limit <number>`: Maximum number of epics to return (default: 20)
+- `--verbose`: Enable verbose logging for debugging
+
+### `epic-status <epic-id>`
+
+Get the status of a JIRA epic and its child tickets.
+
+```bash
+poolside epic-status PROJ-123
+```
+
+**Options:**
+
+- `--verbose`: Enable verbose logging for debugging
+
+### `cursor-prompt <epic-id>`
+
+Generate a prompt template for Cursor agents to run the epic workflow.
+
+```bash
+poolside cursor-prompt PROJ-123
+```
+
+This command outputs a ready-to-use prompt that you can copy and paste into Cursor or other AI agents. The prompt includes:
+
+- Clear instructions on how to run the poolside CLI
+- Explanation of what the workflow does
+- Step-by-step guidance for implementing tickets
+- Important notes about the automation
+
+**Use Cases:**
+
+- Human-in-the-loop workflows with Cursor agents
+- Onboarding new team members to the poolside workflow
+- Creating consistent instructions for AI assistants
+
+**Note:** This command doesn't connect to JIRA - it's just a template generator.
+
+### `setup-jira-pat`
+
+Set up JIRA Personal Access Token for better security.
+
+```bash
+poolside setup-jira-pat
+```
+
+**Options:**
+
+- `--jira-base-url <url>`: JIRA base URL (overrides env var)
+
+### `init-env`
+
+Initialize environment configuration file.
+
+```bash
+poolside init-env -o .env
+```
+
+**Options:**
+
+- `-o, --output <file>`: Output env file path (default: ".env")
+
+### `check-config`
+
+Check current environment configuration.
+
+```bash
+poolside check-config
+```
+
+### `test-connections`
+
+Test connections to JIRA, GitHub, and OpenAI.
+
+```bash
+poolside test-connections --verbose
+```
+
+### Environment Variables
+
+| Variable                  | Required | Description                                        |
+| ------------------------- | -------- | -------------------------------------------------- |
+| `POOLSIDE_OPENAI_API_KEY` | Yes      | OpenAI API key for generating coding prompts       |
+| `POOLSIDE_JIRA_HOST`      | Yes\*    | JIRA server hostname (without https://)            |
+| `POOLSIDE_JIRA_USERNAME`  | Yes\*    | JIRA username                                      |
+| `POOLSIDE_JIRA_PASSWORD`  | Yes\*    | JIRA password or Personal Access Token             |
+| `POOLSIDE_GITHUB_TOKEN`   | No       | GitHub Personal Access Token for enhanced features |
+| `POOLSIDE_AI_MODEL`       | No       | OpenAI model to use (default: gpt-4o)              |
+| `POOLSIDE_AI_MAX_TOKENS`  | No       | Maximum tokens for AI responses (default: 4000)    |
+
+\*Required for epic automation workflows
+
+## Example Usage
+
+### Basic Epic Processing
+
+```bash
+# Process an epic and claim the next available ticket
+poolside process-epic PROJ-123
+
+# Use a custom agent name
+poolside process-epic PROJ-123 --agent "Claude Agent"
+
+# Use different names for agent and claimant
+poolside process-epic PROJ-123 --agent "Cursor Agent" --claimant "John Doe"
+```
+
+### Epic Management
+
+```bash
+# List all epics in a project
+poolside list-epics PROJ
+
+# Get detailed status of an epic
+poolside epic-status PROJ-123
+
+# Generate a prompt template for Cursor agents
+poolside cursor-prompt PROJ-123
+
+# Check what tickets are available
+poolside epic-status PROJ-123 --verbose
+```
+
+### Output
+
+The `process-epic` command generates:
+
+1. **Console Output**: Progress updates and final prompt
+2. **Temp File**: A markdown file with the coding prompt saved to system temp directory
+3. **Return Data**: Structured data about the epic, ticket, and generated prompt
+
+Example output:
+
+```
+🚀 Processing Epic: PROJ-123
+✅ Found epic: Implement user authentication system
+✅ Found available ticket: PROJ-124 - Create login form component
+✅ Ticket PROJ-124 has been claimed
+✅ Coding prompt saved to: /tmp/PROJ-124-prompt.md
+
+📝 Generated Coding Prompt:
+============================================================
+# Coding Task: Create Login Form Component
+
+## Objective
+Create a reusable login form component for the user authentication system...
+
+## Requirements
+- Implement form validation
+- Handle login errors gracefully
+- Support "Remember Me" functionality
+- Responsive design for mobile and desktop
+
+## Implementation Guidelines
+...
+============================================================
+```
+
+## Integration with Agents
+
+This tool is specifically designed for integration with coding agents like Cursor AI, GitHub Copilot, or custom AI assistants. The workflow is optimized for:
+
+- **Automated Execution**: All commands can be run without user interaction
+- **Structured Output**: Consistent output format for parsing by agents
+- **Error Handling**: Comprehensive error reporting for debugging
+- **Verbose Logging**: Detailed logging for troubleshooting automated workflows
+
+### Agent Integration Example
+
+```javascript
+// Example agent integration
+const { execSync } = require("child_process");
+
+try {
+  const result = execSync('poolside process-epic PROJ-123 --agent "My Agent"', {
+    encoding: "utf8",
+  });
+
+  // Parse the output to extract the prompt
+  const promptMatch = result.match(
+    /📝 Generated Coding Prompt:\n={60}\n([\s\S]*?)\n={60}/
+  );
+  const prompt = promptMatch ? promptMatch[1] : null;
+
+  if (prompt) {
+    // Use the prompt for coding tasks
+    console.log("Generated prompt:", prompt);
+  }
+} catch (error) {
+  console.error("Workflow failed:", error.message);
+}
+```
+
+## Troubleshooting
 
 ### Common Issues
 
-**"Config file not found"**
+1. **JIRA Authentication Failures**
 
-- Ensure the config file path is correct
-- Use `npm start init-config` to create a template
+   - Use `setup-jira-pat` for more secure authentication
+   - Verify JIRA_HOST doesn't include `https://`
+   - Check if your JIRA instance requires special permissions
 
-**"Repository must be in format owner/repo"**
+2. **Epic Not Found**
 
-- Check that all repository entries use the correct format
-- Example: `"microsoft/vscode"`, not `"vscode"` or `"https://github.com/microsoft/vscode"`
+   - Verify the epic key is correct
+   - Ensure you have access to the project
+   - Check if the issue type is actually "Epic"
 
-**API Rate Limits**
+3. **No Ready Tickets**
 
-- GitHub: 5,000 requests/hour for authenticated requests
-- OpenAI: Varies by plan and model
-- Consider reducing `batchSize` or adding delays
+   - No tickets with "ready" status found
+   - Use `epic-status` command to check ticket statuses
+   - Verify the epic has child tickets with "ready" status
 
-**JIRA Connection Issues**
+4. **AI Generation Failures**
+   - Check OpenAI API key and billing
+   - Verify AI model availability
+   - Reduce `AI_MAX_TOKENS` if hitting limits
 
-- Verify JIRA credentials in `.env`
-- Use `npm start setup-jira-pat` for Personal Access Token setup
-- Check that JIRA_HOST doesn't include `https://`
+### Debug Mode
 
-### Verbose Mode
-
-Enable detailed logging for debugging:
+Use `--verbose` flag on any command for detailed debugging information:
 
 ```bash
-npm start generate -c config.json --verbose
+poolside process-epic PROJ-123 --verbose
 ```
 
-This provides:
-
-- Detailed API request/response information
-- Processing progress for each step
-- Token usage statistics
-- Error details and suggestions
-
-## 🔐 Security
-
-- Store credentials in `.env` file (never commit to version control)
-- Use environment variables in production
-- Consider using JIRA Personal Access Tokens instead of passwords
-- Regularly rotate API keys and tokens
-
-## 📈 Performance Tips
-
-- **Optimize batch size**: Smaller batches (2-3) for better error handling, larger (5-8) for speed
-- **Use appropriate models**: `gpt-4o-mini` for most use cases, `gpt-4o` for maximum quality
-- **Adjust token limits**: Higher limits for complex repositories, lower for simple ones
-- **Filter repositories**: Only include repos with significant changes in your config
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -344,6 +331,69 @@ This provides:
 4. Add tests if applicable
 5. Submit a pull request
 
-## 📄 License
+## Publishing (Maintainers Only)
+
+The package includes several publishing scripts for different scenarios:
+
+### Quick Release (Patch)
+
+For bug fixes and small improvements:
+
+```bash
+npm run release
+```
+
+This will:
+
+- Build the project
+- Run tests
+- Run linting
+- Bump patch version
+- Publish to npm
+
+### Manual Version Control
+
+For more control over versioning:
+
+```bash
+# Patch version (2.1.0 → 2.1.1)
+npm run publish:patch
+
+# Minor version (2.1.0 → 2.2.0)
+npm run publish:minor
+
+# Major version (2.1.0 → 3.0.0)
+npm run publish:major
+
+# Beta release (2.1.0 → 2.1.1-beta.0)
+npm run publish:beta
+```
+
+### Pre-publish Checks
+
+To verify everything is ready for publishing:
+
+```bash
+npm run prepublishOnly
+```
+
+This runs build, tests, and linting without publishing.
+
+### Publishing Requirements
+
+- Must be authenticated with npm (`npm login`)
+- Must have publish permissions for the `poolside-cli` package
+- All tests must pass
+- Code must pass linting
+
+## License
 
 MIT License - see LICENSE file for details.
+
+## Support
+
+For issues and questions:
+
+- Create an issue on GitHub
+- Check the troubleshooting section
+- Use `--verbose` flag for detailed error information
