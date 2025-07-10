@@ -365,6 +365,52 @@ program
     }
   });
 
+program
+  .command("cursor-prompt <epic-id>")
+  .description(
+    "Generate a prompt template for Cursor agents to run the epic workflow"
+  )
+  .action((epicId: string) => {
+    const prompt = `# Poolside Epic Workflow Instructions
+
+You are a coding assistant helping to implement tickets from a JIRA epic using the poolside CLI automation tool.
+
+## Your Task
+
+1. **Run the poolside CLI command** to get the next available ticket and coding prompt:
+   \`\`\`bash
+   poolside process-epic ${epicId}
+   \`\`\`
+
+2. **Use the generated prompt**: The command will output a detailed coding prompt that includes:
+   - Epic context and background
+   - Specific ticket requirements
+   - Implementation guidelines
+   - Definition of done
+   - PR formatting instructions
+
+3. **Implement the solution** based on the generated prompt
+
+4. **Create a pull request** with the title format specified in the prompt (usually: \`TICKET-KEY description\`)
+
+## What the poolside command does:
+- Finds the next available ticket from the epic
+- Claims the ticket automatically
+- Generates a comprehensive coding prompt using AI
+- Outputs the prompt for you to follow
+
+## Important Notes:
+- The poolside command will automatically claim the ticket in JIRA
+- Follow the generated prompt exactly for best results
+- The prompt includes specific PR title formatting requirements
+- If no tickets are available, the command will let you know
+
+## Ready to start?
+Run the command above and follow the generated prompt to complete your implementation.`;
+
+    console.log(prompt);
+  });
+
 // Release Notes Workflow Commands
 program
   .command("generate-release-notes")

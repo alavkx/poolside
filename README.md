@@ -115,6 +115,29 @@ poolside epic-status PROJ-123
 
 - `--verbose`: Enable verbose logging for debugging
 
+### `cursor-prompt <epic-id>`
+
+Generate a prompt template for Cursor agents to run the epic workflow.
+
+```bash
+poolside cursor-prompt PROJ-123
+```
+
+This command outputs a ready-to-use prompt that you can copy and paste into Cursor or other AI agents. The prompt includes:
+
+- Clear instructions on how to run the poolside CLI
+- Explanation of what the workflow does
+- Step-by-step guidance for implementing tickets
+- Important notes about the automation
+
+**Use Cases:**
+
+- Human-in-the-loop workflows with Cursor agents
+- Onboarding new team members to the poolside workflow
+- Creating consistent instructions for AI assistants
+
+**Note:** This command doesn't connect to JIRA - it's just a template generator.
+
 ### `setup-jira-pat`
 
 Set up JIRA Personal Access Token for better security.
@@ -201,6 +224,9 @@ poolside list-epics PROJ
 
 # Get detailed status of an epic
 poolside epic-status PROJ-123
+
+# Generate a prompt template for Cursor agents
+poolside cursor-prompt PROJ-123
 
 # Check what tickets are available
 poolside epic-status PROJ-123 --verbose
