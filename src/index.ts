@@ -383,7 +383,7 @@ You are a coding assistant helping to implement tickets from a JIRA epic using t
 
 1. **Run the poolside CLI command** to get the next available ticket and coding prompt:
    \`\`\`bash
-   poolside process-epic ${epicId}
+   npx poolside process-epic ${epicId}
    \`\`\`
 
 2. **Use the generated prompt**: The command will output a detailed coding prompt that includes:
