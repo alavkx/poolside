@@ -88,7 +88,7 @@ export async function generateMultiRepoReleaseNotes(config: MultiRepoConfig): Pr
     // Initialize clients
     const githubClient = new GitHubClient(process.env.GITHUB_TOKEN!);
     const jiraClient = await createJiraClient(jiraConfig, verbose);
-    const aiProcessor = new AIProcessor(process.env.OPENAI_API_KEY!, verbose, aiConfig);
+    const aiProcessor = new AIProcessor(process.env.POOLSIDE_OPENAI_API_KEY!, verbose, aiConfig);
     const markdownGenerator = new MarkdownGenerator();
 
     overallSpinner.succeed('Clients initialized successfully');
