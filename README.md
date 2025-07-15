@@ -13,13 +13,13 @@ A CLI tool for automating workflows with productivity tools like JIRA and GitHub
 ## Installation
 
 ```bash
-npm install -g poolside-cli
+npm install -g poolside
 ```
 
 Or run directly with npx:
 
 ```bash
-npx poolside-cli --help
+npx poolside --help
 ```
 
 ## Quick Start
@@ -382,7 +382,7 @@ This runs build, tests, and linting without publishing.
 ### Publishing Requirements
 
 - Must be authenticated with npm (`npm login`)
-- Must have publish permissions for the `poolside-cli` package
+- Must have publish permissions for the `poolside` package
 - All tests must pass
 - Code must pass linting
 

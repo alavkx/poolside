@@ -1,5 +1,5 @@
 {
-  "name": "poolside-cli",
+  "name": "poolside",
   "version": "0.1.0",
   "description": "CLI tool for automating workflows with productivity tools like JIRA and GitHub - poolside automation",
   "main": "dist/index.js",
@@ -61,10 +61,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/poolside/poolside-cli.git"
+    "url": "https://github.com/poolside/poolside.git"
   },
-  "homepage": "https://github.com/poolside/poolside-cli#readme",
+  "homepage": "https://github.com/poolside/poolside#readme",
   "bugs": {
-    "url": "https://github.com/poolside/poolside-cli/issues"
+    "url": "https://github.com/poolside/poolside/issues"
   }
 }
