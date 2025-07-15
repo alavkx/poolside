@@ -1,9 +1,9 @@
-import { openai } from '@ai-sdk/openai';
-import { generateText } from 'ai';
-import ora from 'ora';
-import chalk from 'chalk';
-import type { JiraTicket } from './jira-client.js';
-import type { GitHubPR } from './github-client.js';
+import { openai } from "@ai-sdk/openai";
+import { generateText } from "ai";
+import ora from "ora";
+import chalk from "chalk";
+import type { JiraTicket } from "./jira-client.js";
+import type { GitHubPR } from "./github-client.js";
 
 export interface AIConfig {
   maxTokens?: number;
@@ -50,22 +50,31 @@ export class AIProcessor {
       );
     }
 
+    // Set OPENAI_API_KEY for the @ai-sdk/openai library
+    process.env.OPENAI_API_KEY = apiKey;
+
     // Apply AI configuration with defaults
     this.config = {
       maxTokens: 8000,
       batchSize: 3,
-      model: 'gpt-4o',
+      model: "gpt-4o",
       ...aiConfig,
     };
 
     this.model = openai(this.config.model);
 
     if (this.verbose) {
-      console.log(chalk.gray('🔧 [VERBOSE] AI Processor initialized'));
+      console.log(chalk.gray("🔧 [VERBOSE] AI Processor initialized"));
       console.log(chalk.gray(`🔧 [VERBOSE] Model: ${this.config.model}`));
-      console.log(chalk.gray(`🔧 [VERBOSE] Max Tokens: ${this.config.maxTokens}`));
-      console.log(chalk.gray(`🔧 [VERBOSE] Batch Size: ${this.config.batchSize}`));
-      console.log(chalk.gray(`🔧 [VERBOSE] API Key: ${apiKey.substring(0, 8)}...`));
+      console.log(
+        chalk.gray(`🔧 [VERBOSE] Max Tokens: ${this.config.maxTokens}`)
+      );
+      console.log(
+        chalk.gray(`🔧 [VERBOSE] Batch Size: ${this.config.batchSize}`)
+      );
+      console.log(
+        chalk.gray(`🔧 [VERBOSE] API Key: ${apiKey.substring(0, 8)}...`)
+      );
     }
   }
 
@@ -75,15 +84,25 @@ export class AIProcessor {
     month: string,
     repoConfig: RepoConfig | null = null
   ): Promise<ReleaseNotesData> {
-    const spinner = ora('Generating release notes with AI...').start();
+    const spinner = ora("Generating release notes with AI...").start();
 
     if (this.verbose) {
-      spinner.text = 'Generating release notes with AI... (verbose mode)';
-      console.log(chalk.gray(`\n🔧 [VERBOSE] Starting AI generation for ${prData.length} PRs`));
-      console.log(chalk.gray(`🔧 [VERBOSE] JIRA tickets available: ${jiraTickets.length}`));
+      spinner.text = "Generating release notes with AI... (verbose mode)";
+      console.log(
+        chalk.gray(
+          `\n🔧 [VERBOSE] Starting AI generation for ${prData.length} PRs`
+        )
+      );
+      console.log(
+        chalk.gray(`🔧 [VERBOSE] JIRA tickets available: ${jiraTickets.length}`)
+      );
       console.log(chalk.gray(`🔧 [VERBOSE] Target month: ${month}`));
       if (repoConfig) {
-        console.log(chalk.gray(`🔧 [VERBOSE] Repository: ${repoConfig.name} (${repoConfig.repo})`));
+        console.log(
+          chalk.gray(
+            `🔧 [VERBOSE] Repository: ${repoConfig.name} (${repoConfig.repo})`
+          )
+        );
       }
     }
 
@@ -91,7 +110,9 @@ export class AIProcessor {
       const enhancedPRs = this.enhancePRsWithJiraData(prData, jiraTickets);
 
       if (this.verbose) {
-        const withJira = enhancedPRs.filter((pr) => pr.relatedTickets.length > 0);
+        const withJira = enhancedPRs.filter(
+          (pr) => pr.relatedTickets.length > 0
+        );
         console.log(
           chalk.gray(
             `🔧 [VERBOSE] PRs enhanced with JIRA data: ${withJira.length}/${enhancedPRs.length}`
@@ -102,26 +123,34 @@ export class AIProcessor {
       const groupedChanges = this.groupChangesByType(enhancedPRs, repoConfig);
 
       if (this.verbose) {
-        console.log(chalk.gray('🔧 [VERBOSE] Changes grouped by type:'));
+        console.log(chalk.gray("🔧 [VERBOSE] Changes grouped by type:"));
         Object.entries(groupedChanges).forEach(([type, prs]) => {
           console.log(chalk.gray(`  • ${type}: ${prs.length} PRs`));
         });
       }
 
-      const releaseNotesData = await this.processInBatches(groupedChanges, month, repoConfig);
+      const releaseNotesData = await this.processInBatches(
+        groupedChanges,
+        month,
+        repoConfig
+      );
 
       if (this.verbose) {
         const totalEntries = Object.values(releaseNotesData).flat().length;
-        console.log(chalk.gray(`🔧 [VERBOSE] Generated ${totalEntries} release note entries`));
+        console.log(
+          chalk.gray(
+            `🔧 [VERBOSE] Generated ${totalEntries} release note entries`
+          )
+        );
       }
 
-      spinner.succeed('Release notes generated successfully');
+      spinner.succeed("Release notes generated successfully");
       return releaseNotesData;
     } catch (error: any) {
-      spinner.fail('Failed to generate release notes');
+      spinner.fail("Failed to generate release notes");
 
       if (this.verbose) {
-        console.log(chalk.red('\n🔧 [VERBOSE] Detailed error information:'));
+        console.log(chalk.red("\n🔧 [VERBOSE] Detailed error information:"));
         console.log(chalk.red(`  Error type: ${error.constructor.name}`));
         console.log(chalk.red(`  Error message: ${error.message}`));
 
@@ -130,14 +159,14 @@ export class AIProcessor {
         }
 
         if (error.headers) {
-          console.log(chalk.red('  Response headers:'));
+          console.log(chalk.red("  Response headers:"));
           Object.entries(error.headers).forEach(([key, value]) => {
             console.log(chalk.red(`    ${key}: ${value}`));
           });
         }
 
         if (error.stack && this.verbose) {
-          console.log(chalk.red('  Stack trace:'));
+          console.log(chalk.red("  Stack trace:"));
           console.log(chalk.red(error.stack));
         }
       }
@@ -146,7 +175,10 @@ export class AIProcessor {
     }
   }
 
-  enhancePRsWithJiraData(prData: GitHubPR[], jiraTickets: JiraTicket[]): EnhancedPR[] {
+  enhancePRsWithJiraData(
+    prData: GitHubPR[],
+    jiraTickets: JiraTicket[]
+  ): EnhancedPR[] {
     const jiraMap = new Map(jiraTickets.map((ticket) => [ticket.key, ticket]));
 
     return prData.map((pr) => {
@@ -157,11 +189,17 @@ export class AIProcessor {
 
       if (this.verbose && jiraKeys.length > 0) {
         console.log(
-          chalk.gray(`🔧 [VERBOSE] PR #${pr.number}: Found JIRA keys: ${jiraKeys.join(', ')}`)
+          chalk.gray(
+            `🔧 [VERBOSE] PR #${pr.number}: Found JIRA keys: ${jiraKeys.join(
+              ", "
+            )}`
+          )
         );
         if (relatedTickets.length !== jiraKeys.length) {
           const missing = jiraKeys.filter((key) => !jiraMap.has(key));
-          console.log(chalk.yellow(`  ⚠️  Missing JIRA tickets: ${missing.join(', ')}`));
+          console.log(
+            chalk.yellow(`  ⚠️  Missing JIRA tickets: ${missing.join(", ")}`)
+          );
         }
       }
 
@@ -196,62 +234,71 @@ export class AIProcessor {
       groups[category].push(pr);
 
       if (this.verbose) {
-        console.log(chalk.gray(`🔧 [VERBOSE] PR #${pr.number} categorized as: ${category}`));
+        console.log(
+          chalk.gray(
+            `🔧 [VERBOSE] PR #${pr.number} categorized as: ${category}`
+          )
+        );
       }
     });
 
     return groups;
   }
 
-  categorizeChange(pr: EnhancedPR, repoConfig: RepoConfig | null = null): keyof GroupedChanges {
+  categorizeChange(
+    pr: EnhancedPR,
+    repoConfig: RepoConfig | null = null
+  ): keyof GroupedChanges {
     const title = pr.title.toLowerCase();
     const labels = pr.labels.map((label) => label.toLowerCase());
-    const jiraTypes = pr.relatedTickets.map((ticket) => ticket.issueType.toLowerCase());
+    const jiraTypes = pr.relatedTickets.map((ticket) =>
+      ticket.issueType.toLowerCase()
+    );
 
-    const allText = [title, ...labels, ...jiraTypes].join(' ');
+    const allText = [title, ...labels, ...jiraTypes].join(" ");
 
     // Enhanced categorization for customer-focused releases
     if (
-      allText.includes('feature') ||
-      allText.includes('new') ||
-      allText.includes('story') ||
-      allText.includes('add') ||
-      allText.includes('implement') ||
-      allText.includes('create') ||
-      allText.includes('introduce') ||
-      allText.includes('enable')
+      allText.includes("feature") ||
+      allText.includes("new") ||
+      allText.includes("story") ||
+      allText.includes("add") ||
+      allText.includes("implement") ||
+      allText.includes("create") ||
+      allText.includes("introduce") ||
+      allText.includes("enable")
     ) {
-      return 'features';
+      return "features";
     }
     if (
-      allText.includes('bug') ||
-      allText.includes('fix') ||
-      allText.includes('hotfix') ||
-      allText.includes('resolve') ||
-      allText.includes('error') ||
-      allText.includes('issue') ||
-      allText.includes('patch') ||
-      allText.includes('correct')
+      allText.includes("bug") ||
+      allText.includes("fix") ||
+      allText.includes("hotfix") ||
+      allText.includes("resolve") ||
+      allText.includes("error") ||
+      allText.includes("issue") ||
+      allText.includes("patch") ||
+      allText.includes("correct")
     ) {
-      return 'bugs';
+      return "bugs";
     }
     if (
-      allText.includes('improvement') ||
-      allText.includes('enhance') ||
-      allText.includes('refactor') ||
-      allText.includes('optimize') ||
-      allText.includes('performance') ||
-      allText.includes('update') ||
-      allText.includes('upgrade') ||
-      allText.includes('better') ||
-      allText.includes('streamline') ||
-      allText.includes('polish') ||
-      allText.includes('cleanup')
+      allText.includes("improvement") ||
+      allText.includes("enhance") ||
+      allText.includes("refactor") ||
+      allText.includes("optimize") ||
+      allText.includes("performance") ||
+      allText.includes("update") ||
+      allText.includes("upgrade") ||
+      allText.includes("better") ||
+      allText.includes("streamline") ||
+      allText.includes("polish") ||
+      allText.includes("cleanup")
     ) {
-      return 'improvements';
+      return "improvements";
     }
 
-    return 'other';
+    return "other";
   }
 
   async processInBatches(
@@ -269,13 +316,15 @@ export class AIProcessor {
 
     for (const [category, prs] of Object.entries(groupedChanges) as [
       keyof GroupedChanges,
-      EnhancedPR[],
+      EnhancedPR[]
     ][]) {
       if (prs.length === 0) continue;
 
       if (this.verbose) {
         console.log(
-          chalk.gray(`\n🔧 [VERBOSE] Processing category: ${category} (${prs.length} PRs)`)
+          chalk.gray(
+            `\n🔧 [VERBOSE] Processing category: ${category} (${prs.length} PRs)`
+          )
         );
       }
 
@@ -296,20 +345,28 @@ export class AIProcessor {
         if (this.verbose) {
           console.log(
             chalk.gray(
-              `🔧 [VERBOSE] Processing batch ${i + 1}/${batches.length} (${batch.length} PRs)`
+              `🔧 [VERBOSE] Processing batch ${i + 1}/${batches.length} (${
+                batch.length
+              } PRs)`
             )
           );
         }
 
         try {
-          const batchResult = await this.processBatch(batch, category, repoConfig);
+          const batchResult = await this.processBatch(
+            batch,
+            category,
+            repoConfig
+          );
           processedBatches.push(batchResult);
           totalAPIRequests++;
 
           if (this.verbose) {
             console.log(
               chalk.gray(
-                `🔧 [VERBOSE] Batch ${i + 1} completed: ${batchResult.length} entries generated`
+                `🔧 [VERBOSE] Batch ${i + 1} completed: ${
+                  batchResult.length
+                } entries generated`
               )
             );
           }
@@ -317,13 +374,17 @@ export class AIProcessor {
           // Add small delay between requests to be respectful
           if (i < batches.length - 1) {
             if (this.verbose) {
-              console.log(chalk.gray('🔧 [VERBOSE] Waiting 100ms before next request...'));
+              console.log(
+                chalk.gray("🔧 [VERBOSE] Waiting 100ms before next request...")
+              );
             }
             await new Promise((resolve) => setTimeout(resolve, 100));
           }
         } catch (error: any) {
           if (this.verbose) {
-            console.log(chalk.red(`🔧 [VERBOSE] Batch ${i + 1} failed: ${error.message}`));
+            console.log(
+              chalk.red(`🔧 [VERBOSE] Batch ${i + 1} failed: ${error.message}`)
+            );
           }
           throw error;
         }
@@ -333,7 +394,11 @@ export class AIProcessor {
     }
 
     if (this.verbose) {
-      console.log(chalk.gray(`\n🔧 [VERBOSE] Total API requests made: ${totalAPIRequests}`));
+      console.log(
+        chalk.gray(
+          `\n🔧 [VERBOSE] Total API requests made: ${totalAPIRequests}`
+        )
+      );
     }
 
     return sections;
@@ -355,12 +420,16 @@ export class AIProcessor {
     const prompt = this.buildPrompt(prBatch, category, repoConfig);
 
     if (this.verbose) {
-      console.log(chalk.gray('🔧 [VERBOSE] OpenAI API Request Details:'));
+      console.log(chalk.gray("🔧 [VERBOSE] OpenAI API Request Details:"));
       console.log(chalk.gray(`  Model: ${this.config.model}`));
       console.log(chalk.gray(`  Temperature: 0.3`));
       console.log(chalk.gray(`  Max Tokens: ${this.config.maxTokens}`));
       console.log(chalk.gray(`  Prompt length: ${prompt.length} characters`));
-      console.log(chalk.gray(`  PRs in batch: ${prBatch.map((pr) => `#${pr.number}`).join(', ')}`));
+      console.log(
+        chalk.gray(
+          `  PRs in batch: ${prBatch.map((pr) => `#${pr.number}`).join(", ")}`
+        )
+      );
     }
 
     const startTime = Date.now();
@@ -376,37 +445,48 @@ export class AIProcessor {
       const duration = Date.now() - startTime;
 
       if (this.verbose) {
-        console.log(chalk.gray('🔧 [VERBOSE] OpenAI API Response:'));
+        console.log(chalk.gray("🔧 [VERBOSE] OpenAI API Response:"));
         console.log(chalk.gray(`  Duration: ${duration}ms`));
         console.log(chalk.gray(`  Response length: ${text.length} characters`));
 
         if (usage) {
-          console.log(chalk.gray('  Token usage:'));
+          console.log(chalk.gray("  Token usage:"));
           if (usage.promptTokens)
             console.log(chalk.gray(`    Prompt tokens: ${usage.promptTokens}`));
           if (usage.completionTokens)
-            console.log(chalk.gray(`    Completion tokens: ${usage.completionTokens}`));
-          if (usage.totalTokens) console.log(chalk.gray(`    Total tokens: ${usage.totalTokens}`));
+            console.log(
+              chalk.gray(`    Completion tokens: ${usage.completionTokens}`)
+            );
+          if (usage.totalTokens)
+            console.log(chalk.gray(`    Total tokens: ${usage.totalTokens}`));
         }
 
         if (warnings && warnings.length > 0) {
-          console.log(chalk.yellow('  Warnings:'));
+          console.log(chalk.yellow("  Warnings:"));
           warnings.forEach((warning) => {
             const message =
-              'message' in warning ? warning.message : (warning as any).details || 'No details';
+              "message" in warning
+                ? warning.message
+                : (warning as any).details || "No details";
             console.log(chalk.yellow(`    ${warning.type}: ${message}`));
           });
         }
 
-        console.log(chalk.gray('  Raw response preview:'));
-        console.log(chalk.gray(`    ${text.substring(0, 200)}${text.length > 200 ? '...' : ''}`));
+        console.log(chalk.gray("  Raw response preview:"));
+        console.log(
+          chalk.gray(
+            `    ${text.substring(0, 200)}${text.length > 200 ? "..." : ""}`
+          )
+        );
       }
 
       const parsed = this.parseAIResponse(text);
 
       if (this.verbose) {
         console.log(
-          chalk.gray(`🔧 [VERBOSE] Parsed ${parsed.length} release note entries from response`)
+          chalk.gray(
+            `🔧 [VERBOSE] Parsed ${parsed.length} release note entries from response`
+          )
         );
       }
 
@@ -415,7 +495,7 @@ export class AIProcessor {
       const duration = Date.now() - startTime;
 
       if (this.verbose) {
-        console.log(chalk.red('🔧 [VERBOSE] OpenAI API Error:'));
+        console.log(chalk.red("🔧 [VERBOSE] OpenAI API Error:"));
         console.log(chalk.red(`  Duration before error: ${duration}ms`));
         console.log(chalk.red(`  Error type: ${error.constructor.name}`));
         console.log(chalk.red(`  Error message: ${error.message}`));
@@ -429,22 +509,35 @@ export class AIProcessor {
         }
 
         if (error.response) {
-          console.log(chalk.red('  Response data:'));
-          console.log(chalk.red(`    ${JSON.stringify(error.response, null, 2)}`));
+          console.log(chalk.red("  Response data:"));
+          console.log(
+            chalk.red(`    ${JSON.stringify(error.response, null, 2)}`)
+          );
         }
 
         // Check for specific quota error
-        if (error.message.includes('quota') || error.message.includes('billing')) {
-          console.log(chalk.yellow('\n💡 [VERBOSE] This appears to be a quota/billing issue:'));
+        if (
+          error.message.includes("quota") ||
+          error.message.includes("billing")
+        ) {
           console.log(
             chalk.yellow(
-              '   • Check your OpenAI account billing: https://platform.openai.com/account/billing'
+              "\n💡 [VERBOSE] This appears to be a quota/billing issue:"
             )
           );
           console.log(
-            chalk.yellow('   • Verify your usage limits: https://platform.openai.com/account/usage')
+            chalk.yellow(
+              "   • Check your OpenAI account billing: https://platform.openai.com/account/billing"
+            )
           );
-          console.log(chalk.yellow('   • Consider upgrading your plan if needed'));
+          console.log(
+            chalk.yellow(
+              "   • Verify your usage limits: https://platform.openai.com/account/usage"
+            )
+          );
+          console.log(
+            chalk.yellow("   • Consider upgrading your plan if needed")
+          );
         }
       }
 
@@ -463,20 +556,20 @@ export class AIProcessor {
           pr.relatedTickets.length > 0
             ? `\nRelated tickets: ${pr.relatedTickets
                 .map((t) => `${t.key}: ${t.summary}`)
-                .join(', ')}`
-            : '';
+                .join(", ")}`
+            : "";
 
         return `Change: ${pr.title}
-${pr.body.substring(0, 300)}${pr.body.length > 300 ? '...' : ''}${jiraContext}
-Labels: ${pr.labels.join(', ')}`;
+${pr.body.substring(0, 300)}${pr.body.length > 300 ? "..." : ""}${jiraContext}
+Labels: ${pr.labels.join(", ")}`;
       })
-      .join('\n\n');
+      .join("\n\n");
 
     const categoryContext: Record<keyof GroupedChanges, string> = {
-      features: 'new functionality and capabilities',
-      improvements: 'enhancements and optimizations',
-      bugs: 'fixes and stability improvements',
-      other: 'general updates',
+      features: "new functionality and capabilities",
+      improvements: "enhancements and optimizations",
+      bugs: "fixes and stability improvements",
+      other: "general updates",
     };
 
     const prompt = `You are writing customer-facing release notes for a SaaS product. Transform the following development changes into customer-focused release note entries that highlight the value and benefits to users.
@@ -504,10 +597,10 @@ Generate customer-focused release note entries. Only include changes that provid
 Release note entries:`;
 
     if (this.verbose) {
-      console.log(chalk.gray('\n🔧 [VERBOSE] Generated prompt:'));
-      console.log(chalk.gray('='.repeat(50)));
+      console.log(chalk.gray("\n🔧 [VERBOSE] Generated prompt:"));
+      console.log(chalk.gray("=".repeat(50)));
       console.log(chalk.gray(prompt));
-      console.log(chalk.gray('='.repeat(50)));
+      console.log(chalk.gray("=".repeat(50)));
     }
 
     return prompt;
@@ -515,17 +608,21 @@ Release note entries:`;
 
   parseAIResponse(response: string): string[] {
     const parsed = response
-      .split('\n')
-      .filter((line) => line.trim().startsWith('-'))
+      .split("\n")
+      .filter((line) => line.trim().startsWith("-"))
       .map((line) => line.trim().substring(1).trim())
       .filter((line) => line.length > 0);
 
     if (this.verbose) {
-      console.log(chalk.gray('🔧 [VERBOSE] Parsing AI response:'));
+      console.log(chalk.gray("🔧 [VERBOSE] Parsing AI response:"));
       console.log(chalk.gray(`  Found ${parsed.length} bullet points`));
       parsed.forEach((entry, i) => {
         console.log(
-          chalk.gray(`  ${i + 1}. ${entry.substring(0, 80)}${entry.length > 80 ? '...' : ''}`)
+          chalk.gray(
+            `  ${i + 1}. ${entry.substring(0, 80)}${
+              entry.length > 80 ? "..." : ""
+            }`
+          )
         );
       });
     }

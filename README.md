@@ -13,13 +13,13 @@ A CLI tool for automating workflows with productivity tools like JIRA and GitHub
 ## Installation
 
 ```bash
-npm install -g poolside
+npm install -g poolside@latest
 ```
 
 Or run directly with npx:
 
 ```bash
-npx poolside --help
+npx poolside@latest --help
 ```
 
 ## Quick Start

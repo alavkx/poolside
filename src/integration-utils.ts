@@ -716,6 +716,11 @@ export class IntegrationUtils {
       );
     }
 
+    // Ensure OPENAI_API_KEY is set for the @ai-sdk/openai library
+    if (this.config.ai?.apiKey) {
+      process.env.OPENAI_API_KEY = this.config.ai.apiKey;
+    }
+
     const spinner = ora("Generating coding prompt...").start();
 
     try {
