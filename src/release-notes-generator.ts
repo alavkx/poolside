@@ -1,10 +1,14 @@
-import fs from 'fs/promises';
-import { GitHubClient, type GitHubPR } from './github-client.js';
-import { JiraClient, type JiraTicket } from './jira-client.js';
-import { AIProcessor, type AIConfig, type ReleaseNotesData } from './ai-processor.js';
-import { MarkdownGenerator } from './markdown-generator.js';
-import chalk from 'chalk';
-import ora from 'ora';
+import fs from "fs/promises";
+import { GitHubClient, type GitHubPR } from "./github-client.js";
+import { JiraClient, type JiraTicket } from "./jira-client.js";
+import {
+  AIProcessor,
+  type AIConfig,
+  type ReleaseNotesData,
+} from "./ai-processor.js";
+import { MarkdownGenerator } from "./markdown-generator.js";
+import chalk from "chalk";
+import ora from "ora";
 
 export interface ReleaseConfig {
   month?: string;
@@ -69,11 +73,19 @@ export interface LegacyReleaseNotesOptions {
   verbose?: boolean;
 }
 
-export async function generateMultiRepoReleaseNotes(config: MultiRepoConfig): Promise<void> {
-  const { releaseConfig, aiConfig, repositories, jiraConfig, verbose = false } = config;
+export async function generateMultiRepoReleaseNotes(
+  config: MultiRepoConfig
+): Promise<void> {
+  const {
+    releaseConfig,
+    aiConfig,
+    repositories,
+    jiraConfig,
+    verbose = false,
+  } = config;
 
   const targetMonth = releaseConfig.month || getCurrentMonth();
-  const outputFile = releaseConfig.outputFile || 'release-notes.md';
+  const outputFile = releaseConfig.outputFile || "release-notes.md";
 
   console.log(chalk.blue(`\n🎯 Multi-Repository Release Notes Generation`));
   console.log(chalk.blue(`══════════════════════════════════════════════`));
@@ -82,26 +94,34 @@ export async function generateMultiRepoReleaseNotes(config: MultiRepoConfig): Pr
   console.log(chalk.gray(`Repositories: ${repositories.length}`));
   console.log(chalk.gray(`AI Model: ${aiConfig.model}`));
 
-  const overallSpinner = ora('Initializing multi-repo processing...').start();
+  const overallSpinner = ora("Initializing multi-repo processing...").start();
 
   try {
     // Initialize clients
-    const githubClient = new GitHubClient(process.env.GITHUB_TOKEN!);
+    const githubClient = new GitHubClient(process.env.POOLSIDE_GITHUB_TOKEN!);
     const jiraClient = await createJiraClient(jiraConfig, verbose);
-    const aiProcessor = new AIProcessor(process.env.POOLSIDE_OPENAI_API_KEY!, verbose, aiConfig);
+    const aiProcessor = new AIProcessor(
+      process.env.POOLSIDE_OPENAI_API_KEY!,
+      verbose,
+      aiConfig
+    );
     const markdownGenerator = new MarkdownGenerator();
 
-    overallSpinner.succeed('Clients initialized successfully');
+    overallSpinner.succeed("Clients initialized successfully");
 
     // Sort repositories by priority
-    const sortedRepos = [...repositories].sort((a, b) => (a.priority || 999) - (b.priority || 999));
+    const sortedRepos = [...repositories].sort(
+      (a, b) => (a.priority || 999) - (b.priority || 999)
+    );
 
     const allRepoData: RepoData[] = [];
     let totalPRs = 0;
     let totalJiraTickets = 0;
 
     // Process each repository
-    console.log(chalk.cyan(`\n📦 Processing ${sortedRepos.length} repositories...`));
+    console.log(
+      chalk.cyan(`\n📦 Processing ${sortedRepos.length} repositories...`)
+    );
 
     for (let i = 0; i < sortedRepos.length; i++) {
       const repo = sortedRepos[i];
@@ -110,8 +130,8 @@ export async function generateMultiRepoReleaseNotes(config: MultiRepoConfig): Pr
       console.log(chalk.blue(`\n${progress} ${repo.name} (${repo.repo})`));
       console.log(
         chalk.gray(
-          `    Priority: ${repo.priority || 'unset'} | Include in summary: ${
-            repo.includeInSummary ? 'yes' : 'no'
+          `    Priority: ${repo.priority || "unset"} | Include in summary: ${
+            repo.includeInSummary ? "yes" : "no"
           }`
         )
       );
@@ -160,13 +180,15 @@ export async function generateMultiRepoReleaseNotes(config: MultiRepoConfig): Pr
     console.log(chalk.gray(`   • Total JIRA tickets: ${totalJiraTickets}`));
     console.log(
       chalk.gray(
-        `   • Successful repos: ${allRepoData.filter((r) => !r.error).length}/${allRepoData.length}`
+        `   • Successful repos: ${allRepoData.filter((r) => !r.error).length}/${
+          allRepoData.length
+        }`
       )
     );
 
     // Generate consolidated markdown
     console.log(chalk.cyan(`\n📝 Generating consolidated release notes...`));
-    const consolidatedSpinner = ora('Creating markdown output...').start();
+    const consolidatedSpinner = ora("Creating markdown output...").start();
 
     const totalStats: TotalStats = {
       totalPRs,
@@ -182,11 +204,11 @@ export async function generateMultiRepoReleaseNotes(config: MultiRepoConfig): Pr
       totalStats,
     });
 
-    consolidatedSpinner.succeed('Markdown generated successfully');
+    consolidatedSpinner.succeed("Markdown generated successfully");
 
     // Write to file
     const writeSpinner = ora(`Writing to ${outputFile}...`).start();
-    await fs.writeFile(outputFile, markdown, 'utf8');
+    await fs.writeFile(outputFile, markdown, "utf8");
     writeSpinner.succeed(`Release notes saved to ${outputFile}`);
 
     // Show final summary
@@ -194,13 +216,16 @@ export async function generateMultiRepoReleaseNotes(config: MultiRepoConfig): Pr
     console.log(chalk.green(`══════════════════════════════════════════════`));
     console.log(chalk.blue(`📁 Output: ${outputFile}`));
     console.log(chalk.blue(`📈 Statistics:`));
-    console.log(chalk.blue(`   • Repositories processed: ${allRepoData.length}`));
+    console.log(
+      chalk.blue(`   • Repositories processed: ${allRepoData.length}`)
+    );
     console.log(chalk.blue(`   • Total pull requests: ${totalPRs}`));
     console.log(chalk.blue(`   • Total JIRA tickets: ${totalJiraTickets}`));
     console.log(
       chalk.blue(
         `   • AI-generated entries: ${allRepoData.reduce(
-          (sum, repo) => sum + Object.values(repo.releaseNotesData || {}).flat().length,
+          (sum, repo) =>
+            sum + Object.values(repo.releaseNotesData || {}).flat().length,
           0
         )}`
       )
@@ -208,18 +233,22 @@ export async function generateMultiRepoReleaseNotes(config: MultiRepoConfig): Pr
 
     const failedRepos = allRepoData.filter((r) => r.error);
     if (failedRepos.length > 0) {
-      console.log(chalk.yellow(`\n⚠️  ${failedRepos.length} repositories had issues:`));
+      console.log(
+        chalk.yellow(`\n⚠️  ${failedRepos.length} repositories had issues:`)
+      );
       failedRepos.forEach((repo) => {
-        console.log(chalk.yellow(`   • ${repo.repoConfig.name}: ${repo.error}`));
+        console.log(
+          chalk.yellow(`   • ${repo.repoConfig.name}: ${repo.error}`)
+        );
       });
     }
   } catch (error: any) {
-    overallSpinner.fail('Multi-repo processing failed');
-    console.error(chalk.red('\n❌ Critical error during processing:'));
+    overallSpinner.fail("Multi-repo processing failed");
+    console.error(chalk.red("\n❌ Critical error during processing:"));
     console.error(chalk.red(error.message));
 
     if (verbose) {
-      console.error(chalk.red('\nStack trace:'));
+      console.error(chalk.red("\nStack trace:"));
       console.error(chalk.red(error.stack));
     }
 
@@ -236,9 +265,11 @@ async function processRepository({
   verbose,
   progress,
 }: ProcessRepositoryParams): Promise<RepoData> {
-  const [owner, repoName] = repo.repo.split('/');
+  const [owner, repoName] = repo.repo.split("/");
   if (!owner || !repoName) {
-    throw new Error(`Repository must be in format "owner/repo", got: ${repo.repo}`);
+    throw new Error(
+      `Repository must be in format "owner/repo", got: ${repo.repo}`
+    );
   }
 
   // Step 1: Fetch GitHub PRs
@@ -306,7 +337,9 @@ async function processRepository({
       );
 
       const totalEntries = Object.values(releaseNotesData).flat().length;
-      aiSpinner.succeed(`${progress} Generated ${totalEntries} release note entries`);
+      aiSpinner.succeed(
+        `${progress} Generated ${totalEntries} release note entries`
+      );
     } else {
       aiSpinner.info(`${progress} No PRs to process with AI`);
     }
@@ -329,20 +362,24 @@ async function createJiraClient(
 ): Promise<JiraClient | null> {
   if (!jiraConfig?.enabled) {
     if (verbose) {
-      console.log(chalk.gray('🎫 JIRA integration disabled by configuration'));
+      console.log(chalk.gray("🎫 JIRA integration disabled by configuration"));
     }
     return null;
   }
 
-  const jiraHost = jiraConfig.baseUrl || process.env.JIRA_HOST;
-  const jiraUsername = process.env.JIRA_USERNAME;
-  const jiraPassword = process.env.JIRA_PASSWORD;
+  const jiraHost = jiraConfig.baseUrl || process.env.POOLSIDE_JIRA_HOST;
+  const jiraUsername = process.env.POOLSIDE_JIRA_USERNAME;
+  const jiraPassword = process.env.POOLSIDE_JIRA_PASSWORD;
 
   if (!jiraHost || !jiraUsername || !jiraPassword) {
-    console.log(chalk.yellow('⚠️  JIRA configuration not found. Skipping JIRA ticket fetching.'));
+    console.log(
+      chalk.yellow(
+        "⚠️  JIRA configuration not found. Skipping JIRA ticket fetching."
+      )
+    );
     console.log(
       chalk.gray(
-        '   Set JIRA_HOST, JIRA_USERNAME, and JIRA_PASSWORD environment variables to enable JIRA integration.'
+        "   Set POOLSIDE_JIRA_HOST, POOLSIDE_JIRA_USERNAME, and POOLSIDE_JIRA_PASSWORD environment variables to enable JIRA integration."
       )
     );
     return null;
@@ -350,7 +387,7 @@ async function createJiraClient(
 
   try {
     const jiraClient = new JiraClient({
-      host: jiraHost.replace(/^https?:\/\//, ''),
+      host: jiraHost.replace(/^https?:\/\//, ""),
       username: jiraUsername,
       password: jiraPassword,
     });
@@ -359,19 +396,25 @@ async function createJiraClient(
     const connectionWorks = await jiraClient.testConnection();
     if (!connectionWorks) {
       console.log(
-        chalk.yellow('⚠️  JIRA connection test failed. Continuing without JIRA integration.')
+        chalk.yellow(
+          "⚠️  JIRA connection test failed. Continuing without JIRA integration."
+        )
       );
       return null;
     }
 
     if (verbose) {
-      console.log(chalk.green('✅ JIRA client initialized and tested successfully'));
+      console.log(
+        chalk.green("✅ JIRA client initialized and tested successfully")
+      );
     }
 
     return jiraClient;
   } catch (error: any) {
     console.log(
-      chalk.yellow('⚠️  Failed to initialize JIRA client. Continuing without JIRA integration.')
+      chalk.yellow(
+        "⚠️  Failed to initialize JIRA client. Continuing without JIRA integration."
+      )
     );
     console.log(chalk.gray(`   Error: ${error.message}`));
     return null;
@@ -379,7 +422,9 @@ async function createJiraClient(
 }
 
 // Legacy single-repo function for backward compatibility
-export async function generateReleaseNotes(options: LegacyReleaseNotesOptions): Promise<void> {
+export async function generateReleaseNotes(
+  options: LegacyReleaseNotesOptions
+): Promise<void> {
   const { repo, month, outputFile, jiraBaseUrl, verbose } = options;
 
   // Convert to new multi-repo format
@@ -387,21 +432,21 @@ export async function generateReleaseNotes(options: LegacyReleaseNotesOptions): 
     releaseConfig: {
       month,
       outputFile,
-      title: 'Release Notes',
-      description: 'Generated release notes',
+      title: "Release Notes",
+      description: "Generated release notes",
       includeTableOfContents: false,
       includeSummary: true,
     },
     aiConfig: {
       maxTokens: 4000,
       batchSize: 5,
-      model: 'gpt-4o-mini',
+      model: "gpt-4o-mini",
     },
     repositories: [
       {
-        name: repo.split('/')[1],
+        name: repo.split("/")[1],
         repo: repo,
-        description: '',
+        description: "",
         priority: 1,
         includeInSummary: true,
       },
@@ -418,5 +463,5 @@ export async function generateReleaseNotes(options: LegacyReleaseNotesOptions): 
 
 function getCurrentMonth(): string {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
