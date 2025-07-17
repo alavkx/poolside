@@ -62,6 +62,18 @@ interface SearchOptions {
   maxResults?: number;
 }
 
+interface ProcessIssueOptions {
+  agentName?: string;
+  claimantName?: string;
+  dryRun?: boolean;
+}
+
+interface ProcessIssueResult {
+  issue: Ticket;
+  prompt: string;
+  tempFile: string;
+}
+
 export class IntegrationUtils {
   private config: IntegrationConfig;
   public jiraClient: JiraClient | null = null;
@@ -766,6 +778,150 @@ Make it actionable for a coding agent to implement.`;
       spinner.fail("Failed to generate coding prompt");
       throw error;
     }
+  }
+
+  async processIssue(
+    issueId: string,
+    options: ProcessIssueOptions = {}
+  ): Promise<ProcessIssueResult | null> {
+    const agentName = options.agentName || "Coding Agent";
+    const claimantName = options.claimantName || agentName;
+
+    console.log(chalk.blue(`🚀 Processing Issue: ${issueId}`));
+
+    if (this.config.verbose) {
+      console.log(chalk.gray(`Agent: ${agentName}`));
+      console.log(chalk.gray(`Claimant: ${claimantName}`));
+    }
+
+    try {
+      // Step 1: Validate connections
+      await this.validateConnections();
+
+      // Step 2: Get the issue
+      const issue = await this.getIssue(issueId);
+
+      if (!issue) {
+        throw new Error(`Issue ${issueId} not found`);
+      }
+
+      console.log(chalk.green(`✅ Found issue: ${issue.summary}`));
+
+      // Step 3: Check if issue is available for claiming
+      if (!this.isIssueAvailable(issue)) {
+        console.log(
+          chalk.yellow(
+            `⚠️  Issue ${issueId} is not available for claiming (status: ${issue.status})`
+          )
+        );
+        return null;
+      }
+
+      console.log(
+        chalk.green(
+          `✅ Issue is available for claiming (status: ${issue.status})`
+        )
+      );
+
+      // Step 4: Claim the issue
+      await this.claimTicket(
+        issue.key,
+        claimantName,
+        this.config.jira?.username || "",
+        options.dryRun || false
+      );
+
+      // Step 5: Generate coding prompt
+      const prompt = await this.generateCodingPrompt(issue);
+
+      // Step 6: Save to temp file and output
+      const tempFile = await this.writeToTempFile(
+        prompt,
+        `${issue.key}-prompt.md`
+      );
+
+      console.log(chalk.green(`✅ Coding prompt saved to: ${tempFile}`));
+
+      // Step 7: Output to stdout
+      console.log(chalk.blue("\n📝 Generated Coding Prompt:"));
+      console.log(chalk.gray("=".repeat(60)));
+      console.log(prompt);
+      console.log(chalk.gray("=".repeat(60)));
+
+      return {
+        issue,
+        prompt,
+        tempFile,
+      };
+    } catch (error: any) {
+      console.error(chalk.red("❌ Issue workflow failed:"), error.message);
+      if (this.config.verbose) {
+        console.error(chalk.red("Stack trace:"), error.stack);
+      }
+      throw error;
+    }
+  }
+
+  private async getIssue(issueId: string): Promise<Ticket | null> {
+    if (!this.jiraClient) {
+      throw new Error(
+        "JIRA client not initialized. Check your JIRA configuration."
+      );
+    }
+
+    const spinner = ora(`Fetching issue ${issueId}...`).start();
+
+    try {
+      let issue: any;
+
+      if (this.jiraClient.isPAT && this.jiraClient.axios) {
+        // Use axios with Bearer token for PAT authentication
+        const response = await this.jiraClient.axios.get(`/rest/api/2/issue/${issueId}`);
+        issue = response.data;
+      } else if (this.jiraClient.jira) {
+        // Use traditional jira-client
+        issue = await this.jiraClient.jira.findIssue(issueId);
+      } else {
+        throw new Error("No JIRA client available");
+      }
+
+      const ticket: Ticket = {
+        key: issue.key,
+        summary: issue.fields.summary,
+        description: issue.fields.description || "",
+        status: issue.fields.status.name,
+        assignee: issue.fields.assignee?.displayName || null,
+        reporter: issue.fields.reporter?.displayName || "Unknown",
+        created: issue.fields.created,
+        updated: issue.fields.updated,
+        labels: issue.fields.labels?.map((label: any) => label.name) || [],
+        components: issue.fields.components?.map((comp: any) => comp.name) || [],
+        priority: issue.fields.priority?.name || "None",
+        issueType: issue.fields.issuetype?.name || "Task",
+        comments: issue.fields.comment?.comments?.map((comment: any) => ({
+          body: comment.body,
+        })) || [],
+        url: `${this.config.jira?.host}/browse/${issue.key}`,
+      };
+
+      spinner.succeed(`Found issue ${issueId}`);
+      return ticket;
+    } catch (error: any) {
+      spinner.fail(`Failed to fetch issue ${issueId}`);
+      if (error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  private isIssueAvailable(issue: Ticket): boolean {
+    // Check if issue is available for claiming
+    // Available if: not assigned or status is "ready" or similar statuses
+    const availableStatuses = ["ready", "to do", "todo", "open", "new", "backlog"];
+    const statusLower = issue.status.toLowerCase();
+    
+    return availableStatuses.includes(statusLower) || !issue.assignee;
   }
 
   async writeToTempFile(content: string, filename?: string): Promise<string> {
