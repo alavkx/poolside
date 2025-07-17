@@ -69,6 +69,14 @@ The main workflow (`process-epic`) performs the following steps:
 5. **Generate Coding Prompt**: Uses AI to create a comprehensive coding prompt
 6. **Save and Output**: Saves the prompt to a temp file and outputs to stdout
 
+## Workflow Types
+
+### Epic Workflow vs Issue Workflow
+
+- **`process-epic`**: Processes an entire epic by finding the next available "ready" ticket within the epic and claiming it. Best for organized epic-based development workflows.
+
+- **`process-issue`**: Processes a specific individual JIRA issue directly. Best for working on specific tickets or when you want to claim a particular issue regardless of epic structure.
+
 ## Commands
 
 ### `process-epic <epic-id>`
@@ -83,6 +91,21 @@ poolside process-epic PROJ-123 --agent "Cursor Agent" --claimant "Developer Bot"
 
 - `-a, --agent <name>`: Name of the agent claiming the ticket (default: "Coding Agent")
 - `-c, --claimant <name>`: Name to use when claiming the ticket (defaults to agent name)
+- `--verbose`: Enable verbose logging for debugging
+
+### `process-issue <issue-id>`
+
+Process a JIRA issue to claim it and generate a coding prompt.
+
+```bash
+poolside process-issue PROJ-456 --agent "Cursor Agent" --claimant "Developer Bot"
+```
+
+**Options:**
+
+- `-a, --agent <name>`: Name of the agent claiming the issue (default: "Coding Agent")
+- `-c, --claimant <name>`: Name to use when claiming the issue (defaults to agent name)
+- `--dry-run`: Preview changes without actually claiming the issue
 - `--verbose`: Enable verbose logging for debugging
 
 ### `list-epics <project-key>`
@@ -200,6 +223,22 @@ poolside process-epic PROJ-123 --agent "Claude Agent"
 
 # Use different names for agent and claimant
 poolside process-epic PROJ-123 --agent "Cursor Agent" --claimant "John Doe"
+```
+
+### Basic Issue Processing
+
+```bash
+# Process a single JIRA issue
+poolside process-issue PROJ-456
+
+# Use a custom agent name
+poolside process-issue PROJ-456 --agent "Claude Agent"
+
+# Use different names for agent and claimant
+poolside process-issue PROJ-456 --agent "Cursor Agent" --claimant "John Doe"
+
+# Dry run to preview changes without claiming
+poolside process-issue PROJ-456 --dry-run
 ```
 
 ### Epic Management

@@ -7,6 +7,7 @@ import fs from "fs/promises";
 import path from "path";
 import { EpicWorkflow } from "./epic-workflow.js";
 import { generateMultiRepoReleaseNotes } from "./release-notes-generator.js";
+import { IntegrationUtils } from "./integration-utils.js";
 
 dotenv.config();
 
@@ -318,6 +319,62 @@ program
         }
       } catch (error: any) {
         console.error(chalk.red("❌ Error processing epic:"), error.message);
+        process.exit(1);
+      }
+    }
+  );
+
+program
+  .command("process-issue <issue-id>")
+  .description(
+    "Process a JIRA issue to claim it and generate a coding prompt"
+  )
+  .option(
+    "-a, --agent <name>",
+    "Name of the agent claiming the issue",
+    "Coding Agent"
+  )
+  .option("-c, --claimant <name>", "Name to use when claiming the issue")
+  .option("--dry-run", "Preview changes without actually claiming the issue")
+  .option("--verbose", "Enable verbose logging for debugging")
+  .action(
+    async (
+      issueId: string,
+      options: {
+        agent: string;
+        claimant?: string;
+        dryRun?: boolean;
+        verbose?: boolean;
+      }
+    ) => {
+      try {
+        validateConfig("epic");
+
+        const config = createWorkflowConfig();
+        config.verbose = options.verbose || false;
+
+        const utils = new IntegrationUtils(config);
+        const result = await utils.processIssue(issueId, {
+          agentName: options.agent,
+          claimantName: options.claimant || options.agent,
+          dryRun: options.dryRun,
+        });
+
+        if (result) {
+          console.log(
+            chalk.green("\n✅ Issue workflow completed successfully!")
+          );
+          console.log(chalk.blue(`🎫 Issue: ${result.issue.key}`));
+          console.log(chalk.blue(`📄 Prompt file: ${result.tempFile}`));
+        } else {
+          console.log(
+            chalk.yellow(
+              "\n⚠️  Issue workflow completed but no issue was processed"
+            )
+          );
+        }
+      } catch (error: any) {
+        console.error(chalk.red("❌ Error processing issue:"), error.message);
         process.exit(1);
       }
     }
