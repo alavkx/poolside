@@ -9,6 +9,8 @@ export interface AIConfig {
   maxTokens?: number;
   batchSize?: number;
   model?: string;
+  enableEditorPersona?: boolean;
+  editorMaxTokens?: number;
 }
 
 export interface EnhancedPR extends GitHubPR {
@@ -58,6 +60,8 @@ export class AIProcessor {
       maxTokens: 8000,
       batchSize: 3,
       model: "gpt-4o",
+      enableEditorPersona: false,
+      editorMaxTokens: 4000,
       ...aiConfig,
     };
 
@@ -72,6 +76,20 @@ export class AIProcessor {
       console.log(
         chalk.gray(`🔧 [VERBOSE] Batch Size: ${this.config.batchSize}`)
       );
+      console.log(
+        chalk.gray(
+          `🔧 [VERBOSE] Editor Persona: ${
+            this.config.enableEditorPersona ? "enabled" : "disabled"
+          }`
+        )
+      );
+      if (this.config.enableEditorPersona) {
+        console.log(
+          chalk.gray(
+            `🔧 [VERBOSE] Editor Max Tokens: ${this.config.editorMaxTokens}`
+          )
+        );
+      }
       console.log(
         chalk.gray(`🔧 [VERBOSE] API Key: ${apiKey.substring(0, 8)}...`)
       );
@@ -129,17 +147,39 @@ export class AIProcessor {
         });
       }
 
-      const releaseNotesData = await this.processInBatches(
+      const initialReleaseNotesData = await this.processInBatches(
         groupedChanges,
         month,
         repoConfig
       );
 
       if (this.verbose) {
-        const totalEntries = Object.values(releaseNotesData).flat().length;
+        const totalEntries = Object.values(initialReleaseNotesData).flat()
+          .length;
         console.log(
           chalk.gray(
-            `🔧 [VERBOSE] Generated ${totalEntries} release note entries`
+            `🔧 [VERBOSE] Generated ${totalEntries} initial release note entries`
+          )
+        );
+      }
+
+      // Apply editor persona refinement if enabled
+      const releaseNotesData = await this.refineWithEditorPersona(
+        initialReleaseNotesData,
+        prData,
+        repoConfig
+      );
+
+      if (this.verbose && this.config.enableEditorPersona) {
+        const finalTotalEntries = Object.values(releaseNotesData).flat().length;
+        const initialTotalEntries = Object.values(
+          initialReleaseNotesData
+        ).flat().length;
+        console.log(
+          chalk.gray(
+            `🔧 [VERBOSE] Final result: ${finalTotalEntries} entries (${
+              initialTotalEntries - finalTotalEntries
+            } consolidated/removed by editor)`
           )
         );
       }
@@ -629,5 +669,215 @@ Release note entries:`;
     }
 
     return parsed;
+  }
+
+  async refineWithEditorPersona(
+    releaseNotesData: ReleaseNotesData,
+    originalPRData: GitHubPR[],
+    repoConfig: RepoConfig | null = null
+  ): Promise<ReleaseNotesData> {
+    if (!this.config.enableEditorPersona) {
+      return releaseNotesData;
+    }
+
+    const spinner = ora(
+      "Refining release notes with editor persona..."
+    ).start();
+
+    try {
+      if (this.verbose) {
+        console.log(
+          chalk.gray("\n🔧 [VERBOSE] Starting editor persona refinement")
+        );
+      }
+
+      const refinedData: ReleaseNotesData = {
+        features: [],
+        bugs: [],
+        improvements: [],
+        other: [],
+      };
+
+      for (const [category, entries] of Object.entries(releaseNotesData) as [
+        keyof ReleaseNotesData,
+        string[]
+      ][]) {
+        if (entries.length === 0) continue;
+
+        if (this.verbose) {
+          console.log(
+            chalk.gray(
+              `🔧 [VERBOSE] Refining ${category}: ${entries.length} entries`
+            )
+          );
+        }
+
+        const refinedEntries = await this.processEditorRefinement(
+          entries,
+          category,
+          originalPRData,
+          repoConfig
+        );
+
+        refinedData[category] = refinedEntries;
+
+        if (this.verbose) {
+          console.log(
+            chalk.gray(
+              `🔧 [VERBOSE] Refined ${category}: ${
+                refinedEntries.length
+              } entries (${
+                entries.length - refinedEntries.length
+              } removed/consolidated)`
+            )
+          );
+        }
+      }
+
+      spinner.succeed("Release notes refined by editor persona");
+      return refinedData;
+    } catch (error: any) {
+      spinner.fail("Editor persona refinement failed");
+      if (this.verbose) {
+        console.log(
+          chalk.red(`🔧 [VERBOSE] Editor refinement error: ${error.message}`)
+        );
+      }
+      // Return original data if editor fails
+      return releaseNotesData;
+    }
+  }
+
+  async processEditorRefinement(
+    entries: string[],
+    category: keyof ReleaseNotesData,
+    originalPRData: GitHubPR[],
+    repoConfig: RepoConfig | null = null
+  ): Promise<string[]> {
+    const prompt = this.buildEditorPrompt(
+      entries,
+      category,
+      originalPRData,
+      repoConfig
+    );
+
+    if (this.verbose) {
+      console.log(chalk.gray("🔧 [VERBOSE] Editor Persona API Request:"));
+      console.log(chalk.gray(`  Model: ${this.config.model}`));
+      console.log(chalk.gray(`  Max Tokens: ${this.config.editorMaxTokens}`));
+      console.log(chalk.gray(`  Entries to refine: ${entries.length}`));
+    }
+
+    const startTime = Date.now();
+
+    try {
+      const { text, usage } = await generateText({
+        model: this.model,
+        prompt,
+        temperature: 0.05, // Very low temperature for maximum factual accuracy
+        maxTokens: this.config.editorMaxTokens,
+      });
+
+      const duration = Date.now() - startTime;
+
+      if (this.verbose) {
+        console.log(chalk.gray("🔧 [VERBOSE] Editor Persona Response:"));
+        console.log(chalk.gray(`  Duration: ${duration}ms`));
+        console.log(chalk.gray(`  Response length: ${text.length} characters`));
+
+        if (usage) {
+          console.log(chalk.gray("  Token usage:"));
+          if (usage.promptTokens)
+            console.log(chalk.gray(`    Prompt tokens: ${usage.promptTokens}`));
+          if (usage.completionTokens)
+            console.log(
+              chalk.gray(`    Completion tokens: ${usage.completionTokens}`)
+            );
+          if (usage.totalTokens)
+            console.log(chalk.gray(`    Total tokens: ${usage.totalTokens}`));
+        }
+      }
+
+      const refined = this.parseAIResponse(text);
+
+      if (this.verbose) {
+        console.log(
+          chalk.gray(
+            `🔧 [VERBOSE] Editor refined ${entries.length} entries → ${refined.length} entries`
+          )
+        );
+      }
+
+      return refined;
+    } catch (error: any) {
+      if (this.verbose) {
+        console.log(
+          chalk.red(`🔧 [VERBOSE] Editor refinement error: ${error.message}`)
+        );
+      }
+      // Return original entries if editor fails
+      return entries;
+    }
+  }
+
+  buildEditorPrompt(
+    entries: string[],
+    category: keyof ReleaseNotesData,
+    originalPRData: GitHubPR[],
+    repoConfig: RepoConfig | null = null
+  ): string {
+    const categoryContext: Record<keyof ReleaseNotesData, string> = {
+      features: "new functionality and capabilities",
+      improvements: "enhancements and optimizations",
+      bugs: "fixes and stability improvements",
+      other: "general updates",
+    };
+
+    const prContext =
+      originalPRData.length > 0
+        ? `\n\nOriginal PR Context (for reference):\n${originalPRData
+            .slice(0, 10)
+            .map((pr) => `- PR #${pr.number}: ${pr.title}`)
+            .join("\n")}${
+            originalPRData.length > 10
+              ? `\n- ... and ${originalPRData.length - 10} more PRs`
+              : ""
+          }`
+        : "";
+
+    const repoContext = repoConfig
+      ? `\n\nRepository: ${repoConfig.name} (${repoConfig.repo})`
+      : "";
+
+    const entriesText = entries
+      .map((entry, i) => `${i + 1}. ${entry}`)
+      .join("\n");
+
+    return `You are an experienced technical editor reviewing release notes for an engineering collaboration platform used by aerospace and automotive teams. Your role is to refine entries while maintaining strict factual accuracy.
+
+Category: ${categoryContext[category] || category}
+
+EDITORIAL GUIDELINES FOR ENGINEERING PLATFORM:
+- Consolidate similar entries ONLY when they describe the same actual change
+- Use precise technical terminology appropriate for engineering teams
+- Do NOT add benefits, impacts, or outcomes not explicitly mentioned in the original data
+- Do NOT read between the lines or make assumptions about what changes might achieve
+- Stick strictly to what was actually implemented or fixed
+- Improve clarity and remove redundancy while preserving all factual details
+- If an entry lacks clear user value in the original description, remove it rather than enhance it
+- Use active voice but only describe what actually happened, not potential benefits
+- Maintain engineering accuracy over marketing appeal
+- Focus on CAD, simulation, documentation, and integration workflow improvements when factually present
+
+Current release note entries to review:
+${entriesText}${repoContext}${prContext}
+
+Please review and refine these entries. Output only the improved entries that provide clear customer value, formatted as:
+- [Refined entry with improved clarity and impact]
+- [Another consolidated or improved entry]
+
+Focus on quality over quantity - it's better to have fewer, high-impact entries than many low-value ones.
+
+Refined release note entries:`;
   }
 }

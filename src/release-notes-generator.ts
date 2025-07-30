@@ -580,6 +580,8 @@ export async function generateReleaseNotes(
       maxTokens: 4000,
       batchSize: 5,
       model: "gpt-4o-mini",
+      enableEditorPersona: false,
+      editorMaxTokens: 2000,
     },
     repositories: [
       {
