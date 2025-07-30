@@ -537,12 +537,20 @@ Releases are automated via GitHub Actions when changes are merged to `master`:
 If you need to publish manually:
 
 ```bash
-# Generate version and changelog
+# 1. Generate version and changelog
 npm run version-packages
 
-# Publish to npm
+# 2. Commit the version changes
+git add .
+git commit -m "Release v0.2.2"
+
+# 3. Publish to npm
 npm run release
 ```
+
+**Note**: Always commit the version changes before publishing. The `version-packages` command updates `package.json`, `CHANGELOG.md`, and removes changeset files - these changes must be committed to maintain a clean git history.
+
+The `npm run release` script will build, test, and use `changeset publish` (not `npm publish`) to safely publish only packages with properly bumped versions.
 
 ### Publishing Requirements
 
