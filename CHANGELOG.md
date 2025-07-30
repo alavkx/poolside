@@ -1,5 +1,32 @@
 # poolside
 
+## 0.4.0
+
+### Minor Changes
+
+- Add editor persona refinement for release notes
+
+  **New Features:**
+
+  - Add `enableEditorPersona` configuration option to enable/disable editor refinement
+  - Add `editorMaxTokens` configuration to control editor AI token usage
+  - Implement `refineWithEditorPersona` method for post-processing release notes
+  - Add engineering-focused editor prompts with strict factual accuracy guidelines
+
+  **Improvements:**
+
+  - Enhanced release notes generation with AI-powered consolidation and quality improvement
+  - Better handling of redundant or low-value release note entries
+  - Improved clarity and technical accuracy of generated content
+  - Added comprehensive verbose logging for editor persona operations
+
+  **Technical:**
+
+  - New `processEditorRefinement` method for category-specific refinement
+  - Custom `buildEditorPrompt` with context-aware engineering guidelines
+  - Temperature optimization (0.05) for maximum factual accuracy in editor mode
+  - Fallback handling when editor persona fails to maintain reliability
+
 ## 0.3.0
 
 ### Minor Changes
