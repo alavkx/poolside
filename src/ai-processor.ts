@@ -586,6 +586,7 @@ CRITICAL GUIDELINES:
 - Start with action verbs that show value: "Enhanced", "Streamlined", "Added", "Improved", "Fixed"
 - Explain the "what" and "why" from a user perspective
 - If a change has no customer-facing impact, do not include it
+- Do NOT use emojis in the output
 
 Development Changes:
 ${prDescriptions}

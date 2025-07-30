@@ -24,10 +24,16 @@ npx poolside@latest --help
 
 ## Quick Start
 
-1. **Initialize environment configuration:**
+1. **Run the interactive setup wizard:**
 
    ```bash
-   poolside init-env
+   poolside setup
+   ```
+
+   Or manually initialize environment configuration:
+
+   ```bash
+   poolside setup env
    ```
 
 2. **Edit the `.env` file** with your credentials:
@@ -43,14 +49,14 @@ npx poolside@latest --help
    POOLSIDE_JIRA_USERNAME=your_jira_username
    POOLSIDE_JIRA_PASSWORD=your_jira_password_or_pat
 
-   # GitHub Configuration (Optional)
+   # GitHub Configuration (Required for release notes)
    POOLSIDE_GITHUB_TOKEN=your_github_token_here
    ```
 
 3. **Test your connections:**
 
    ```bash
-   poolside test-connections
+   poolside setup test
    ```
 
 4. **Process an epic:**
@@ -79,7 +85,9 @@ The main workflow (`process-epic`) performs the following steps:
 
 ## Commands
 
-### `process-epic <epic-id>`
+### Epic and Issue Automation
+
+#### `process-epic <epic-id>`
 
 Process a JIRA epic to claim the next available ticket and generate a coding prompt.
 
@@ -91,9 +99,10 @@ poolside process-epic PROJ-123 --agent "Cursor Agent" --claimant "Developer Bot"
 
 - `-a, --agent <name>`: Name of the agent claiming the ticket (default: "Coding Agent")
 - `-c, --claimant <name>`: Name to use when claiming the ticket (defaults to agent name)
+- `--dry-run`: Preview changes without actually claiming the ticket
 - `--verbose`: Enable verbose logging for debugging
 
-### `process-issue <issue-id>`
+#### `process-issue <issue-id>`
 
 Process a JIRA issue to claim it and generate a coding prompt.
 
@@ -108,7 +117,7 @@ poolside process-issue PROJ-456 --agent "Cursor Agent" --claimant "Developer Bot
 - `--dry-run`: Preview changes without actually claiming the issue
 - `--verbose`: Enable verbose logging for debugging
 
-### `list-epics <project-key>`
+#### `list-epics <project-key>`
 
 List all epics for a JIRA project.
 
@@ -121,7 +130,7 @@ poolside list-epics PROJ --limit 10
 - `-l, --limit <number>`: Maximum number of epics to return (default: 20)
 - `--verbose`: Enable verbose logging for debugging
 
-### `epic-status <epic-id>`
+#### `epic-status <epic-id>`
 
 Get the status of a JIRA epic and its child tickets.
 
@@ -133,7 +142,7 @@ poolside epic-status PROJ-123
 
 - `--verbose`: Enable verbose logging for debugging
 
-### `cursor-prompt <epic-id>`
+#### `cursor-prompt <epic-id>`
 
 Generate a prompt template for Cursor agents to run the epic workflow.
 
@@ -156,59 +165,139 @@ This command outputs a ready-to-use prompt that you can copy and paste into Curs
 
 **Note:** This command doesn't connect to JIRA - it's just a template generator.
 
-### `setup-jira-pat`
+### Release Notes Generation
+
+#### `generate-release-notes`
+
+Generate release notes for multiple repositories using a configuration file.
+
+```bash
+poolside generate-release-notes --config release-config.json
+```
+
+**Options:**
+
+- `-c, --config <file>`: Configuration file path (JSON) - **Required**
+- `-m, --month <month>`: Override month from config (YYYY-MM format)
+- `-o, --output <file>`: Override output file from config
+- `--verbose`: Enable verbose logging for debugging
+
+#### `generate-single-repo` (Legacy)
+
+Generate release notes for a single repository (legacy command).
+
+```bash
+poolside generate-single-repo --repo owner/repo --month 2024-01
+```
+
+**Options:**
+
+- `-r, --repo <repo>`: GitHub repository (owner/repo) - **Required**
+- `-m, --month <month>`: Month to generate for (YYYY-MM, default: current month)
+- `-o, --output <file>`: Output file (default: "release-notes.md")
+- `--jira-base-url <url>`: JIRA base URL (overrides env var)
+- `--verbose`: Enable verbose logging for debugging
+
+### Setup and Configuration
+
+#### `setup`
+
+Interactive setup wizard to configure poolside CLI.
+
+```bash
+poolside setup
+```
+
+This command provides a guided setup experience that:
+
+- Analyzes your current configuration
+- Helps you set up missing credentials
+- Tests connections to verify setup
+- Provides specific guidance for common issues
+
+#### `setup env`
+
+Initialize environment configuration file.
+
+```bash
+poolside setup env
+```
+
+**Options:**
+
+- `-o, --output <file>`: Output env file path (default: ".env")
+- `--force`: Force overwrite existing file
+
+#### `setup jira-pat`
 
 Set up JIRA Personal Access Token for better security.
 
 ```bash
-poolside setup-jira-pat
+poolside setup jira-pat
 ```
 
 **Options:**
 
 - `--jira-base-url <url>`: JIRA base URL (overrides env var)
 
-### `init-env`
+#### `setup release`
 
-Initialize environment configuration file.
+Initialize a release notes configuration file.
 
 ```bash
-poolside init-env -o .env
+poolside setup release
 ```
 
 **Options:**
 
-- `-o, --output <file>`: Output env file path (default: ".env")
+- `-o, --output <file>`: Output config file path (default: "release-config.json")
 
-### `check-config`
+#### `setup check`
 
 Check current environment configuration.
 
 ```bash
-poolside check-config
+poolside setup check
 ```
 
-### `test-connections`
+#### `setup test`
 
 Test connections to JIRA, GitHub, and OpenAI.
 
 ```bash
-poolside test-connections --verbose
+poolside setup test --verbose
 ```
+
+**Options:**
+
+- `--verbose`: Enable verbose logging for debugging
+
+#### `setup validate`
+
+Check configuration and test all connections.
+
+```bash
+poolside setup validate --verbose
+```
+
+**Options:**
+
+- `--verbose`: Enable verbose logging for debugging
 
 ### Environment Variables
 
-| Variable                  | Required | Description                                        |
-| ------------------------- | -------- | -------------------------------------------------- |
-| `POOLSIDE_OPENAI_API_KEY` | Yes      | OpenAI API key for generating coding prompts       |
-| `POOLSIDE_JIRA_HOST`      | Yes\*    | JIRA server hostname (without https://)            |
-| `POOLSIDE_JIRA_USERNAME`  | Yes\*    | JIRA username                                      |
-| `POOLSIDE_JIRA_PASSWORD`  | Yes\*    | JIRA password or Personal Access Token             |
-| `POOLSIDE_GITHUB_TOKEN`   | No       | GitHub Personal Access Token for enhanced features |
-| `POOLSIDE_AI_MODEL`       | No       | OpenAI model to use (default: gpt-4o)              |
-| `POOLSIDE_AI_MAX_TOKENS`  | No       | Maximum tokens for AI responses (default: 4000)    |
+| Variable                  | Required | Description                                     |
+| ------------------------- | -------- | ----------------------------------------------- |
+| `POOLSIDE_OPENAI_API_KEY` | Yes      | OpenAI API key for generating coding prompts    |
+| `POOLSIDE_JIRA_HOST`      | Yes\*    | JIRA server hostname (without https://)         |
+| `POOLSIDE_JIRA_USERNAME`  | Yes\*    | JIRA username                                   |
+| `POOLSIDE_JIRA_PASSWORD`  | Yes\*    | JIRA password or Personal Access Token          |
+| `POOLSIDE_GITHUB_TOKEN`   | No\*\*   | GitHub Personal Access Token for release notes  |
+| `POOLSIDE_AI_MODEL`       | No       | OpenAI model to use (default: gpt-4o)           |
+| `POOLSIDE_AI_MAX_TOKENS`  | No       | Maximum tokens for AI responses (default: 4000) |
 
 \*Required for epic automation workflows
+\*\*Required for release notes generation
 
 ## Example Usage
 
@@ -239,6 +328,9 @@ poolside process-issue PROJ-456 --agent "Cursor Agent" --claimant "John Doe"
 
 # Dry run to preview changes without claiming
 poolside process-issue PROJ-456 --dry-run
+
+# Dry run for epic processing (also available)
+poolside process-epic PROJ-123 --dry-run
 ```
 
 ### Epic Management
@@ -255,6 +347,44 @@ poolside cursor-prompt PROJ-123
 
 # Check what tickets are available
 poolside epic-status PROJ-123 --verbose
+```
+
+### Release Notes Generation
+
+```bash
+# Generate release notes for multiple repositories
+poolside generate-release-notes --config release-config.json
+
+# Override month and output file
+poolside generate-release-notes --config release-config.json --month 2024-01 --output january-release.md
+
+# Legacy single-repo mode
+poolside generate-single-repo --repo owner/repository --month 2024-01
+```
+
+### Setup and Configuration
+
+```bash
+# Interactive setup wizard
+poolside setup
+
+# Set up environment file
+poolside setup env
+
+# Set up JIRA Personal Access Token
+poolside setup jira-pat
+
+# Initialize release notes config
+poolside setup release
+
+# Check current configuration
+poolside setup check
+
+# Test all connections
+poolside setup test
+
+# Validate setup and test connections
+poolside setup validate
 ```
 
 ### Output
@@ -333,7 +463,7 @@ try {
 
 1. **JIRA Authentication Failures**
 
-   - Use `setup-jira-pat` for more secure authentication
+   - Use `poolside setup jira-pat` for more secure authentication
    - Verify JIRA_HOST doesn't include `https://`
    - Check if your JIRA instance requires special permissions
 
@@ -370,64 +500,142 @@ poolside process-epic PROJ-123 --verbose
 4. Add tests if applicable
 5. Submit a pull request
 
-## Publishing (Maintainers Only)
+## Publishing with Changesets
 
-The package includes several publishing scripts for different scenarios:
+This project uses [Changesets](https://github.com/changesets/changesets) for automated versioning and publishing. The workflow ensures consistent changelogs and proper semantic versioning.
 
-### Quick Release (Patch)
+### Creating Changes
 
-For bug fixes and small improvements:
+When you make changes to the codebase, create a changeset to document them:
 
 ```bash
-npm run release
+npm run changeset
 ```
 
 This will:
 
-- Build the project
-- Run tests
-- Run linting
-- Bump patch version
-- Publish to npm
+- Ask which type of change you made (patch, minor, major)
+- Prompt for a description of the change
+- Create a changeset file in `.changeset/`
 
-### Manual Version Control
+### Types of Changes
 
-For more control over versioning:
+- **Patch** (`0.0.X`): Bug fixes, small improvements
+- **Minor** (`0.X.0`): New features, non-breaking changes
+- **Major** (`X.0.0`): Breaking changes
 
-```bash
-# Patch version (2.1.0 → 2.1.1)
-npm run publish:patch
+### Release Process
 
-# Minor version (2.1.0 → 2.2.0)
-npm run publish:minor
+Releases are automated via GitHub Actions when changes are merged to `master`:
 
-# Major version (2.1.0 → 3.0.0)
-npm run publish:major
+1. **Automatic PR Creation**: When changesets are detected, a "Version Packages" PR is automatically created
+2. **Review and Merge**: Review the generated changelog and version bumps, then merge the PR
+3. **Automatic Publishing**: Upon merging, the package is automatically published to npm
 
-# Beta release (2.1.0 → 2.1.1-beta.0)
-npm run publish:beta
-```
+### Manual Release (if needed)
 
-### Pre-publish Checks
-
-To verify everything is ready for publishing:
+If you need to publish manually:
 
 ```bash
-npm run prepublishOnly
-```
+# Generate version and changelog
+npm run version-packages
 
-This runs build, tests, and linting without publishing.
+# Publish to npm
+npm run release
+```
 
 ### Publishing Requirements
 
-- Must be authenticated with npm (`npm login`)
-- Must have publish permissions for the `poolside` package
-- All tests must pass
-- Code must pass linting
+- Must have `NPM_TOKEN` configured in GitHub repository secrets
+- All tests must pass via CI
+- Changes must be documented with changesets
 
 ## License
 
 MIT License - see LICENSE file for details.
+
+## GitHub Token Setup
+
+For **release notes generation**, you need a GitHub Personal Access Token with specific permissions. GitHub offers two types of tokens:
+
+### Option 1: Fine-grained Personal Access Tokens (Recommended)
+
+**Fine-grained tokens** provide better security with repository-specific permissions.
+
+#### Setup Steps:
+
+1. **Go to GitHub Settings**: https://github.com/settings/tokens?type=beta
+2. **Click "Generate new token"**
+3. **Configure the token**:
+   - **Expiration**: Set appropriate expiration (90 days recommended)
+   - **Resource owner**: Select your organization (e.g., `Istari-digital`)
+   - **Repository access**:
+     - Select "All repositories" OR choose specific repositories
+4. **Set Repository permissions**:
+   ```
+   ✅ Contents: Read           - Access repository files and metadata
+   ✅ Metadata: Read           - Access repository metadata (mandatory)
+   ✅ Pull requests: Read      - List and read pull requests (required!)
+   ```
+5. **Copy the token** and add to your `.env` file
+6. **Test the token**: `poolside setup test`
+
+> **Important**: The "Pull requests: Read" permission is essential for accessing PR data. Without it, you'll get "Resource not accessible by personal access token" errors.
+
+### Option 2: Classic Personal Access Tokens
+
+**Classic tokens** have broader permissions and simpler setup.
+
+#### Required Scopes:
+
+**For Private Repositories:**
+
+```
+✅ repo              - Full control of private repositories
+✅ read:org          - Read organization membership
+```
+
+**For Public Repositories:**
+
+```
+✅ public_repo       - Access public repositories
+✅ read:org          - Read organization membership
+```
+
+#### Setup Steps:
+
+1. **Go to GitHub Settings**: https://github.com/settings/tokens
+2. **Click "Generate new token (classic)"**
+3. **Set expiration**: 90 days maximum (for security)
+4. **Select scopes**:
+   - For maximum compatibility: `repo` + `read:org`
+   - For public repos only: `public_repo` + `read:org`
+5. **Copy the token** and add to your `.env` file
+6. **Test the token**: `poolside setup test`
+
+### Common Token Issues
+
+| Error                                              | Token Type   | Cause                                     | Solution                                      |
+| -------------------------------------------------- | ------------ | ----------------------------------------- | --------------------------------------------- |
+| `Repository not found`                             | Both         | Missing permissions or wrong repo name    | Add required permissions, verify repository   |
+| `Resource not accessible by personal access token` | Fine-grained | Missing "Pull requests: Read" permission  | Add "Pull requests: Read" to repository perms |
+| `Access denied`                                    | Classic      | Missing `read:org` for organization repos | Add `read:org` scope                          |
+| `Not Found` on public repos                        | Classic      | Token has no repository access            | Add `public_repo` scope minimum               |
+
+### Testing Your Token
+
+After setup, verify your token works:
+
+```bash
+poolside setup test
+```
+
+This will validate:
+
+- ✅ GitHub API connectivity
+- ✅ Repository access permissions
+- ✅ Pull request read permissions
+- ✅ Organization access (if applicable)
 
 ## Support
 

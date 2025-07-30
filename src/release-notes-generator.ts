@@ -25,6 +25,7 @@ export interface RepositoryConfig {
   description?: string;
   priority?: number;
   includeInSummary?: boolean;
+  branch?: string; // Optional: override the repository's default branch
 }
 
 export interface JiraConfig {
@@ -114,31 +115,164 @@ export async function generateMultiRepoReleaseNotes(
       (a, b) => (a.priority || 999) - (b.priority || 999)
     );
 
+    // Validate all repositories first
+    console.log(
+      chalk.cyan(`\n🔍 Validating ${sortedRepos.length} repositories...`)
+    );
+    const validationSpinner = ora("Checking repository access...").start();
+
+    const validationResults: Array<{
+      repo: RepositoryConfig;
+      valid: boolean;
+      error?: string;
+      detectedBranch?: string;
+    }> = [];
+
+    for (const repo of sortedRepos) {
+      const [owner, repoName] = repo.repo.split("/");
+      if (!owner || !repoName) {
+        validationResults.push({
+          repo,
+          valid: false,
+          error: `Repository must be in format "owner/repo", got: ${repo.repo}`,
+        });
+        continue;
+      }
+
+      const validation = await githubClient.validateRepository(owner, repoName);
+      validationResults.push({
+        repo,
+        valid: validation.exists,
+        error: validation.error,
+        detectedBranch: validation.defaultBranch,
+      });
+    }
+
+    const validRepos = validationResults.filter((r) => r.valid);
+    const invalidRepos = validationResults.filter((r) => !r.valid);
+
+    validationSpinner.succeed(
+      `Validation complete: ${validRepos.length}/${sortedRepos.length} repositories accessible`
+    );
+
+    if (invalidRepos.length > 0) {
+      console.log(
+        chalk.yellow(
+          `\n⚠️  ${invalidRepos.length} repositories are not accessible:`
+        )
+      );
+      console.log(chalk.gray("─".repeat(60)));
+
+      invalidRepos.forEach(({ repo, error }, index) => {
+        console.log(chalk.yellow(`\n📦 ${repo.name}`));
+        console.log(chalk.gray(`   Repository: ${repo.repo}`));
+
+        if (error) {
+          console.log(chalk.red(`   Status: ${error.split("\n")[0]}`));
+
+          // Extract and format the possible causes
+          const errorLines = error.split("\n");
+          if (errorLines.length > 1) {
+            console.log(chalk.gray(`   Possible causes:`));
+            errorLines.slice(1).forEach((line) => {
+              if (line.trim()) {
+                console.log(chalk.gray(`     ${line.trim()}`));
+              }
+            });
+          }
+        } else {
+          console.log(chalk.red(`   Status: Unknown error`));
+        }
+
+        // Add separator between repositories (except for the last one)
+        if (index < invalidRepos.length - 1) {
+          console.log(chalk.gray("   " + "─".repeat(50)));
+        }
+      });
+
+      console.log(chalk.gray("\n" + "─".repeat(60)));
+    }
+
+    // If too many repositories are invalid, consider failing
+    if (validRepos.length === 0) {
+      throw new Error(
+        "No repositories are accessible. Please check your configuration and GitHub token permissions."
+      );
+    }
+
+    if (invalidRepos.length > validRepos.length) {
+      console.log(
+        chalk.yellow(
+          `\n⚠️  More than half of the repositories (${invalidRepos.length}/${sortedRepos.length}) are inaccessible.`
+        )
+      );
+      console.log(
+        chalk.yellow(
+          "   Consider reviewing your repository configuration and GitHub token permissions."
+        )
+      );
+    }
+
     const allRepoData: RepoData[] = [];
     let totalPRs = 0;
     let totalJiraTickets = 0;
 
     // Process each repository
     console.log(
-      chalk.cyan(`\n📦 Processing ${sortedRepos.length} repositories...`)
+      chalk.cyan(
+        `\n📦 Processing ${validRepos.length} accessible repositories...`
+      )
     );
 
-    for (let i = 0; i < sortedRepos.length; i++) {
-      const repo = sortedRepos[i];
-      const progress = `[${i + 1}/${sortedRepos.length}]`;
+    // Process valid repositories and add invalid ones as failed
+    for (let i = 0; i < validationResults.length; i++) {
+      const {
+        repo,
+        valid,
+        error: validationError,
+        detectedBranch,
+      } = validationResults[i];
+      const progress = `[${i + 1}/${validationResults.length}]`;
 
       console.log(chalk.blue(`\n${progress} ${repo.name} (${repo.repo})`));
       console.log(
         chalk.gray(
           `    Priority: ${repo.priority || "unset"} | Include in summary: ${
             repo.includeInSummary ? "yes" : "no"
+          }${
+            detectedBranch ? ` | Branch: ${repo.branch || detectedBranch}` : ""
           }`
         )
       );
 
+      if (!valid) {
+        console.log(chalk.red(`    ❌ Skipped: ${validationError}`));
+
+        // Add empty data to maintain structure but mark as failed
+        allRepoData.push({
+          repoConfig: repo,
+          prData: [],
+          jiraTickets: [],
+          releaseNotesData: {
+            features: [],
+            bugs: [],
+            improvements: [],
+            other: [],
+          } as Record<string, string[]>,
+          error: validationError!,
+        });
+        continue;
+      }
+
       try {
+        // Use user-specified branch or fall back to detected default branch
+        const repoWithBranch = {
+          ...repo,
+          branch: repo.branch || detectedBranch,
+        };
+
         const repoData = await processRepository({
-          repo,
+          repo: repoWithBranch,
           targetMonth,
           githubClient,
           jiraClient,
@@ -277,7 +411,12 @@ async function processRepository({
   let prData: GitHubPR[] = [];
 
   try {
-    prData = await githubClient.getPRsForMonth(owner, repoName, targetMonth);
+    prData = await githubClient.getPRsForMonth(
+      owner,
+      repoName,
+      targetMonth,
+      repo.branch
+    );
 
     if (prData.length === 0) {
       prSpinner.info(`${progress} No PRs found for ${targetMonth}`);
