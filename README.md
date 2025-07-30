@@ -504,6 +504,8 @@ poolside process-epic PROJ-123 --verbose
 
 This project uses [Changesets](https://github.com/changesets/changesets) for automated versioning and publishing. The workflow ensures consistent changelogs and proper semantic versioning.
 
+> **For AI Agents/Cursor**: See [`.cursorrules`](./.cursorrules) for the complete step-by-step release process optimized for automated workflows.
+
 ### Creating Changes
 
 When you make changes to the codebase, create a changeset to document them:

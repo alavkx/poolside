@@ -1,0 +1,147 @@
+# Cursor Rules for Poolside CLI
+
+## Release Process
+
+When creating a release for this project, follow this **EXACT** step-by-step process:
+
+### 1. Commit Current Changes
+```bash
+git add .
+git commit -m "feat: [Descriptive commit message of the new feature/changes]"
+```
+
+### 2. Create Changeset File
+The interactive `npm run changeset` often fails in agent environments. Instead, manually create a changeset file:
+
+**File**: `.changeset/[descriptive-name].md`
+
+**Format**:
+```markdown
+---
+"poolside": [patch|minor|major]
+---
+
+[Brief description of changes]
+
+**New Features:**
+- [List new features]
+
+**Improvements:**
+- [List improvements]
+
+**Technical:**
+- [List technical changes]
+```
+
+**Version Guidelines:**
+- **patch** (0.0.X): Bug fixes, small improvements
+- **minor** (0.X.0): New features, non-breaking changes  
+- **major** (X.0.0): Breaking changes
+
+### 3. Version Bump and Changelog Update
+```bash
+npm run version-packages
+```
+This will:
+- Update `package.json` version
+- Update `CHANGELOG.md` with changeset content
+- Remove the changeset file
+
+### 4. Commit Version Changes
+```bash
+git add .
+git commit -m "Release v[X.Y.Z]"
+```
+
+### 5. Build, Test, and Publish
+```bash
+npm run release
+```
+This will:
+- Build TypeScript (`npm run build`)
+- Run tests (`npm run test`) 
+- Run linter (`npm run lint` - warnings allowed)
+- Publish to npm (`changeset publish`)
+- Create git tag (e.g., `v0.4.0`)
+
+## Important Notes
+
+- **Lint warnings are acceptable** - The release will proceed even with lint warnings
+- **Tests must pass** - Release will fail if tests don't pass
+- **Use `changeset publish`** not `npm publish` - This ensures proper version management
+- **Always commit version changes** before the release step
+- **The process is automated** - Don't manually edit package.json versions
+
+## Code Style Guidelines
+
+### TypeScript
+- Never use `any` type - always use proper generics [[memory:4773921]]
+- No backwards compatibility unless explicitly requested [[memory:4774030]]
+- Prefer functional style and meaningful newlines
+- Use `node:` protocol for Node.js imports
+
+### React/Frontend Rules
+- Treat UIs as thin layer over data
+- Skip `useState` unless absolutely needed
+- Use `useRef` and variables for non-reactive state
+- Create new components for complex conditionals
+- Derive data instead of `useEffect`
+- Only use `useCallback`/`useMemo` with comments explaining why
+- Treat `setTimeout` as last resort (with comments)
+- **No useless comments** - only for race conditions, TODOs, or confusing code
+
+## Project Structure
+
+- **Main entry**: `src/index.ts`
+- **Core modules**: `ai-processor.ts`, `epic-workflow.ts`, `github-client.ts`, `jira-client.ts`
+- **Release generation**: `release-notes-generator.ts`, `markdown-generator.ts`
+- **Tests**: `tests/` directory
+- **Build output**: `dist/` directory (auto-generated)
+
+## Environment Setup
+
+- Uses `.env` file for configuration
+- Key variables: `POOLSIDE_OPENAI_API_KEY`, `POOLSIDE_JIRA_*`, `POOLSIDE_GITHUB_TOKEN`
+- Setup wizard: `poolside setup`
+- Test connections: `poolside setup test`
+
+## Common Commands
+
+```bash
+# Development
+npm run dev          # Watch mode compilation
+npm run build        # Build TypeScript
+npm run test         # Run tests
+npm run test:watch   # Watch mode tests
+
+# Quality
+npm run lint         # Run Biome linter
+npm run format       # Format code
+npm run check        # Run all checks
+
+# Release (follow process above)
+npm run changeset    # Interactive changeset (often fails in agents)
+npm run version-packages  # Bump version from changesets
+npm run release      # Build, test, and publish
+```
+
+## Troubleshooting
+
+### Changeset Issues
+If `npm run changeset` hangs or fails, manually create the changeset file as shown above.
+
+### Lint Errors
+Minor lint errors (like `any` usage) won't block releases - they're allowed to pass.
+
+### Publishing Failures
+- Ensure you're logged into npm: `npm whoami`
+- Check if version already exists: `npm info poolside`
+- Verify all tests pass locally: `npm test`
+
+## AI-Specific Features
+
+This CLI tool has several AI integration features:
+- **AI Processor**: `src/ai-processor.ts` - Core AI functionality
+- **Editor Persona**: New feature for release notes refinement
+- **OpenAI Integration**: Uses OpenAI API for prompt generation
+- **JIRA + AI**: Combines JIRA tickets with AI-generated coding prompts
