@@ -9,6 +9,14 @@ import inquirer from "inquirer";
 import { EpicWorkflow } from "./epic-workflow.js";
 import { generateMultiRepoReleaseNotes } from "./release-notes-generator.js";
 import { IntegrationUtils } from "./integration-utils.js";
+import { AIProcessor } from "./ai-processor.js";
+import {
+  DiffGenerator,
+  formatAsText,
+  formatAsMarkdown,
+  formatAsJson,
+} from "./diff-generator.js";
+import { SlackClient } from "./slack-client.js";
 
 dotenv.config();
 
@@ -632,6 +640,162 @@ program
           chalk.red("❌ Error generating release notes:"),
           error.message
         );
+        process.exit(1);
+      }
+    }
+  );
+
+// What's the Diff Command - Analyze git diff and generate customer-focused summary
+program
+  .command("whats-the-diff")
+  .description(
+    "Analyze a git diff and generate a customer-focused summary of changes"
+  )
+  .requiredOption(
+    "-r, --range <range>",
+    "Git range to analyze (e.g., main...HEAD, abc123..def456)"
+  )
+  .option(
+    "-s, --slack-webhook <url>",
+    "Slack webhook URL to post the summary (or set POOLSIDE_SLACK_WEBHOOK_URL)"
+  )
+  .option(
+    "-f, --format <type>",
+    "Output format: text, markdown, json, slack",
+    "text"
+  )
+  .option(
+    "-p, --repo-path <path>",
+    "Path to git repository (defaults to current directory)",
+    process.cwd()
+  )
+  .option("--pr-number <number>", "PR number to include in the summary")
+  .option("--pr-url <url>", "PR URL to include in the summary")
+  .option("--title <title>", "Custom title for the summary")
+  .option("--verbose", "Enable verbose logging for debugging")
+  .action(
+    async (options: {
+      range: string;
+      slackWebhook?: string;
+      format: string;
+      repoPath: string;
+      prNumber?: string;
+      prUrl?: string;
+      title?: string;
+      verbose?: boolean;
+    }) => {
+      try {
+        // Only require OpenAI for this command
+        const apiKey = process.env.POOLSIDE_OPENAI_API_KEY;
+        if (!apiKey) {
+          console.error(
+            chalk.red(
+              "❌ Missing required configuration: POOLSIDE_OPENAI_API_KEY"
+            )
+          );
+          console.log(
+            chalk.gray(
+              "Set POOLSIDE_OPENAI_API_KEY environment variable or run 'poolside setup'"
+            )
+          );
+          process.exit(1);
+        }
+
+        console.log(chalk.blue("🔍 Analyzing git diff..."));
+        console.log(chalk.gray(`Range: ${options.range}`));
+        console.log(chalk.gray(`Repository: ${options.repoPath}`));
+
+        // Initialize components
+        const aiProcessor = new AIProcessor(apiKey, options.verbose, {
+          model: process.env.POOLSIDE_AI_MODEL || "gpt-4o",
+        });
+
+        const diffGenerator = new DiffGenerator({
+          repoPath: options.repoPath,
+          verbose: options.verbose,
+        });
+
+        // Get diff data
+        const diffData = await diffGenerator.getDiff(options.range);
+
+        if (diffData.files.length === 0) {
+          console.log(
+            chalk.yellow("⚠️  No changes found in the specified range")
+          );
+          process.exit(0);
+        }
+
+        // Generate AI summary
+        const summary = await diffGenerator.generateSummary(
+          diffData,
+          aiProcessor
+        );
+
+        // Add optional metadata
+        if (options.title) {
+          summary.title = options.title;
+        }
+        if (options.prNumber) {
+          summary.prNumber = Number.parseInt(options.prNumber, 10);
+        }
+        if (options.prUrl) {
+          summary.prUrl = options.prUrl;
+        }
+
+        // Format output
+        let output: string;
+        const format = options.format.toLowerCase();
+
+        switch (format) {
+          case "markdown":
+          case "md":
+            output = formatAsMarkdown(summary);
+            break;
+          case "json":
+            output = formatAsJson(summary);
+            break;
+          case "slack":
+            output = JSON.stringify(
+              SlackClient.formatDiffSummary(summary),
+              null,
+              2
+            );
+            break;
+          case "text":
+          default:
+            output = formatAsText(summary);
+            break;
+        }
+
+        // Output to console
+        console.log(chalk.blue("\n📋 Summary:"));
+        console.log("─".repeat(50));
+        console.log(output);
+        console.log("─".repeat(50));
+
+        // Post to Slack if webhook is provided
+        const webhookUrl =
+          options.slackWebhook || process.env.POOLSIDE_SLACK_WEBHOOK_URL;
+
+        if (webhookUrl) {
+          if (!SlackClient.isValidWebhookUrl(webhookUrl)) {
+            console.warn(
+              chalk.yellow(
+                "⚠️  Warning: Webhook URL doesn't look like a Slack webhook"
+              )
+            );
+          }
+
+          const slackClient = new SlackClient({ webhookUrl });
+          const slackMessage = SlackClient.formatDiffSummary(summary);
+          await slackClient.postMessage(slackMessage);
+        }
+
+        console.log(chalk.green("\n✅ Diff analysis complete!"));
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error(chalk.red("❌ Error analyzing diff:"), errorMessage);
         process.exit(1);
       }
     }

@@ -1,0 +1,73 @@
+name: What's the Diff
+
+# This workflow analyzes PRs and posts customer-focused change summaries to Slack.
+# Copy this workflow to your repository and configure the required secrets.
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+# Prevent multiple runs on the same PR
+concurrency:
+  group: whats-the-diff-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-diff:
+    name: Analyze Changes
+    runs-on: ubuntu-latest
+    # Skip draft PRs unless you want to analyze them too
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history to analyze the diff
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Analyze PR diff
+        run: |
+          npx poolside@latest whats-the-diff \
+            --range "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" \
+            --format text \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --pr-url "${{ github.event.pull_request.html_url }}" \
+            --title "${{ github.event.pull_request.title }}"
+        env:
+          POOLSIDE_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      # Optional: Post to Slack
+      - name: Post to Slack
+        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
+        run: |
+          npx poolside@latest whats-the-diff \
+            --range "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" \
+            --format slack \
+            --slack-webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --pr-url "${{ github.event.pull_request.html_url }}" \
+            --title "${{ github.event.pull_request.title }}"
+        env:
+          POOLSIDE_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+# Required Secrets:
+# - OPENAI_API_KEY: Your OpenAI API key (required)
+# - SLACK_WEBHOOK_URL: Slack incoming webhook URL (optional, for posting to Slack)
+#
+# To set up secrets:
+# 1. Go to your repository Settings > Secrets and variables > Actions
+# 2. Click "New repository secret"
+# 3. Add OPENAI_API_KEY with your OpenAI API key
+# 4. Optionally add SLACK_WEBHOOK_URL for Slack integration
+#
+# To create a Slack webhook:
+# 1. Go to https://api.slack.com/apps
+# 2. Create a new app or select existing
+# 3. Enable "Incoming Webhooks"
+# 4. Add a new webhook to your workspace
+# 5. Copy the webhook URL and add it as a secret
