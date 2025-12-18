@@ -24,6 +24,7 @@ import {
   type ModelPreset,
   type AIProvider,
 } from "./model-config.js";
+import { initChangelog, generateChangelogWorkflow } from "./init-changelog.js";
 
 dotenv.config();
 
@@ -1751,6 +1752,162 @@ async function updateEnvFile(
   }
 
   await fs.writeFile(filePath, content);
+}
+
+// ===========================
+// Init Commands - Scaffold features in projects
+// ===========================
+const initProgram = program
+  .command("init")
+  .description("Scaffold features in your project");
+
+// init changelog - Add GitHub Actions workflow for PR changelog summaries
+initProgram
+  .command("changelog")
+  .description(
+    "Add GitHub Actions workflow for AI-powered PR changelog summaries"
+  )
+  .option("--no-slack", "Skip Slack integration setup")
+  .option("--force", "Overwrite existing workflow file")
+  .option("--dry-run", "Preview what would be created without writing files")
+  .action(
+    async (options: { slack: boolean; force?: boolean; dryRun?: boolean }) => {
+      await initChangelogCommand(options);
+    }
+  );
+
+async function initChangelogCommand(options: {
+  slack: boolean;
+  force?: boolean;
+  dryRun?: boolean;
+}): Promise<void> {
+  const isDryRun = options.dryRun ?? false;
+
+  if (isDryRun) {
+    console.log(
+      chalk.magenta("\n🔍 DRY RUN MODE - No files will be written\n")
+    );
+  }
+
+  console.log(chalk.blue("🏖️  Poolside Changelog Setup\n"));
+
+  // Ask about Slack integration
+  let includeSlack = false;
+  if (options.slack) {
+    const { wantSlack } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "wantSlack",
+        message: "Include Slack integration for posting PR summaries?",
+        default: true,
+      },
+    ]);
+    includeSlack = wantSlack;
+  }
+
+  const workflowPath = path.join(
+    process.cwd(),
+    ".github",
+    "workflows",
+    "changelog.yml"
+  );
+
+  // In dry-run mode, just show what would happen
+  if (isDryRun) {
+    // Check if file exists
+    let fileExists = false;
+    try {
+      await fs.access(workflowPath);
+      fileExists = true;
+    } catch {
+      fileExists = false;
+    }
+
+    console.log(chalk.white("Configuration:"));
+    console.log(
+      chalk.gray(`  • Slack integration: ${includeSlack ? "Yes" : "No"}`)
+    );
+    console.log(chalk.gray(`  • Target: ${workflowPath}`));
+    console.log(chalk.gray(`  • File exists: ${fileExists ? "Yes" : "No"}`));
+    if (fileExists && !options.force) {
+      console.log(
+        chalk.yellow(
+          "\n⚠️  Would skip - file exists (use --force to overwrite)"
+        )
+      );
+    } else if (fileExists && options.force) {
+      console.log(chalk.yellow("\n⚠️  Would overwrite existing file"));
+    }
+    console.log();
+
+    // Show the workflow content
+    const workflowContent = generateChangelogWorkflow(includeSlack);
+    console.log(chalk.white("Generated workflow content:"));
+    console.log(chalk.gray("─".repeat(50)));
+    console.log(chalk.cyan(workflowContent));
+    console.log(chalk.gray("─".repeat(50)));
+
+    console.log(chalk.magenta("\n✨ Dry run complete - no files were written"));
+    console.log(chalk.gray("   Remove --dry-run to create the workflow\n"));
+    return;
+  }
+
+  // Run the init
+  const result = await initChangelog({
+    targetDir: process.cwd(),
+    includeSlack,
+    force: options.force,
+  });
+
+  if (!result.created && result.alreadyExists) {
+    console.log(chalk.yellow("⚠️  Workflow file already exists at:"));
+    console.log(chalk.gray(`   ${result.workflowPath}`));
+    console.log(chalk.gray("\n   Use --force to overwrite\n"));
+    return;
+  }
+
+  console.log(chalk.green("✅ Created .github/workflows/changelog.yml\n"));
+
+  // Print next steps
+  console.log(chalk.white("Next steps:\n"));
+
+  console.log(chalk.cyan("  1. Add OPENAI_API_KEY to your repository secrets"));
+  console.log(
+    chalk.gray("     → Go to: Settings → Secrets and variables → Actions")
+  );
+  console.log(chalk.gray("     → Click 'New repository secret'"));
+  console.log(chalk.gray("     → Name: OPENAI_API_KEY"));
+  console.log(
+    chalk.gray("     → Get key: https://platform.openai.com/api-keys\n")
+  );
+
+  if (includeSlack) {
+    console.log(
+      chalk.cyan("  2. Add SLACK_WEBHOOK_URL for Slack notifications")
+    );
+    console.log(
+      chalk.gray("     → Create a Slack app: https://api.slack.com/apps")
+    );
+    console.log(chalk.gray("     → Enable Incoming Webhooks"));
+    console.log(chalk.gray("     → Add webhook to your channel"));
+    console.log(chalk.gray("     → Add the URL as a repository secret\n"));
+  }
+
+  console.log(
+    chalk.cyan(`  ${includeSlack ? "3" : "2"}. Commit and push the workflow`)
+  );
+  console.log(chalk.gray("     git add .github/workflows/changelog.yml"));
+  console.log(chalk.gray("     git commit -m 'Add PR changelog workflow'"));
+  console.log(chalk.gray("     git push\n"));
+
+  console.log(
+    chalk.green("Done! PRs will now get AI-generated changelog summaries.\n")
+  );
+
+  console.log(chalk.gray("📖 Full documentation:"));
+  console.log(
+    chalk.gray("   https://github.com/poolside/poolside#changelog\n")
+  );
 }
 
 // ===========================
