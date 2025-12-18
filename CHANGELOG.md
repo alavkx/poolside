@@ -1,5 +1,17 @@
 # poolside
 
+## 0.5.1
+
+### Patch Changes
+
+- Rename "What's the Diff" to "Changelog"
+
+  **Changes:**
+
+  - Renamed CLI command from `diff` to `changelog` (with `diff` kept as alias)
+  - Renamed workflow file from `whats-the-diff.yml` to `changelog.yml`
+  - Added installation documentation at `docs/changelog-setup.md`
+
 ## 0.5.0
 
 ### Minor Changes
