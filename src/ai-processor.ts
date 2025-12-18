@@ -1,16 +1,30 @@
+import { anthropic } from "@ai-sdk/anthropic";
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import ora from "ora";
 import chalk from "chalk";
 import type { JiraTicket } from "./jira-client.js";
 import type { GitHubPR } from "./github-client.js";
+import {
+  type AIProvider,
+  type ModelPreset,
+  type ResolvedModel,
+  type ModelResolutionOptions,
+  ConfigManager,
+} from "./model-config.js";
+
+export type { AIProvider };
 
 export interface AIConfig {
+  provider?: AIProvider;
   maxTokens?: number;
   batchSize?: number;
   model?: string;
   enableEditorPersona?: boolean;
   editorMaxTokens?: number;
+  // Preset resolution options
+  preset?: string;
+  resolvedModel?: ResolvedModel;
 }
 
 export interface EnhancedPR extends GitHubPR {
@@ -40,36 +54,101 @@ export interface ReleaseNotesData {
 
 export class AIProcessor {
   private verbose: boolean;
-  private config: Required<AIConfig>;
-  public model: any;
+  private config: Required<Omit<AIConfig, "preset" | "resolvedModel">> & {
+    resolvedModel?: ResolvedModel;
+  };
+  public model: Parameters<typeof generateText>[0]["model"];
+
+  /**
+   * Create an AIProcessor with model preset resolution
+   * This is the recommended way to create an AIProcessor when using presets
+   */
+  static async createWithPreset(
+    verbose = false,
+    aiConfig: AIConfig = {},
+    resolutionOptions: ModelResolutionOptions = {}
+  ): Promise<AIProcessor> {
+    const configManager = new ConfigManager();
+
+    // Resolve the model based on priority
+    const resolved = await configManager.resolveModel(resolutionOptions);
+
+    // Get the API key for the resolved provider
+    const apiKey = configManager.getApiKeyForProvider(resolved.provider);
+
+    if (!apiKey) {
+      const providerName =
+        resolved.provider === "anthropic" ? "Anthropic" : "OpenAI";
+      const envVar =
+        resolved.provider === "anthropic"
+          ? "POOLSIDE_ANTHROPIC_API_KEY"
+          : "POOLSIDE_OPENAI_API_KEY";
+      throw new Error(
+        `${providerName} API key is required (${envVar}). Run "poolside setup" to configure.`
+      );
+    }
+
+    // Create the processor with resolved model
+    return new AIProcessor(apiKey, verbose, {
+      ...aiConfig,
+      provider: resolved.provider,
+      model: resolved.model,
+      resolvedModel: resolved,
+    });
+  }
 
   constructor(apiKey: string, verbose = false, aiConfig: AIConfig = {}) {
     this.verbose = verbose;
 
+    const provider = aiConfig.provider || "openai";
+
     if (!apiKey) {
+      const providerName = provider === "anthropic" ? "Anthropic" : "OpenAI";
       throw new Error(
-        'OpenAI API key is required. Run "npm start check-config" to verify your configuration.'
+        `${providerName} API key is required. Run "npm start check-config" to verify your configuration.`
       );
     }
 
-    // Set OPENAI_API_KEY for the @ai-sdk/openai library
-    process.env.OPENAI_API_KEY = apiKey;
+    // Set the appropriate API key environment variable based on provider
+    if (provider === "anthropic") {
+      process.env.ANTHROPIC_API_KEY = apiKey;
+    } else {
+      process.env.OPENAI_API_KEY = apiKey;
+    }
+
+    // Set default model based on provider
+    const defaultModel =
+      provider === "anthropic" ? "claude-sonnet-4-20250514" : "gpt-4o";
 
     // Apply AI configuration with defaults
     this.config = {
+      provider,
       maxTokens: 8000,
       batchSize: 3,
-      model: "gpt-4o",
+      model: aiConfig.model || defaultModel,
       enableEditorPersona: false,
       editorMaxTokens: 4000,
       ...aiConfig,
+      resolvedModel: aiConfig.resolvedModel,
     };
 
-    this.model = openai(this.config.model);
+    // Initialize the appropriate model based on provider
+    this.model =
+      provider === "anthropic"
+        ? anthropic(this.config.model)
+        : openai(this.config.model);
 
     if (this.verbose) {
       console.log(chalk.gray("🔧 [VERBOSE] AI Processor initialized"));
+      console.log(chalk.gray(`🔧 [VERBOSE] Provider: ${this.config.provider}`));
       console.log(chalk.gray(`🔧 [VERBOSE] Model: ${this.config.model}`));
+      if (this.config.resolvedModel) {
+        console.log(
+          chalk.gray(
+            `🔧 [VERBOSE] Model Source: ${this.config.resolvedModel.source}`
+          )
+        );
+      }
       console.log(
         chalk.gray(`🔧 [VERBOSE] Max Tokens: ${this.config.maxTokens}`)
       );
@@ -94,6 +173,13 @@ export class AIProcessor {
         chalk.gray(`🔧 [VERBOSE] API Key: ${apiKey.substring(0, 8)}...`)
       );
     }
+  }
+
+  /**
+   * Get the resolved model information (if available)
+   */
+  getResolvedModel(): ResolvedModel | undefined {
+    return this.config.resolvedModel;
   }
 
   async generateReleaseNotes(
@@ -460,7 +546,13 @@ export class AIProcessor {
     const prompt = this.buildPrompt(prBatch, category, repoConfig);
 
     if (this.verbose) {
-      console.log(chalk.gray("🔧 [VERBOSE] OpenAI API Request Details:"));
+      console.log(
+        chalk.gray(
+          `🔧 [VERBOSE] ${
+            this.config.provider === "anthropic" ? "Anthropic" : "OpenAI"
+          } API Request Details:`
+        )
+      );
       console.log(chalk.gray(`  Model: ${this.config.model}`));
       console.log(chalk.gray(`  Temperature: 0.3`));
       console.log(chalk.gray(`  Max Tokens: ${this.config.maxTokens}`));
@@ -485,7 +577,13 @@ export class AIProcessor {
       const duration = Date.now() - startTime;
 
       if (this.verbose) {
-        console.log(chalk.gray("🔧 [VERBOSE] OpenAI API Response:"));
+        console.log(
+          chalk.gray(
+            `🔧 [VERBOSE] ${
+              this.config.provider === "anthropic" ? "Anthropic" : "OpenAI"
+            } API Response:`
+          )
+        );
         console.log(chalk.gray(`  Duration: ${duration}ms`));
         console.log(chalk.gray(`  Response length: ${text.length} characters`));
 
@@ -535,7 +633,9 @@ export class AIProcessor {
       const duration = Date.now() - startTime;
 
       if (this.verbose) {
-        console.log(chalk.red("🔧 [VERBOSE] OpenAI API Error:"));
+        const providerName =
+          this.config.provider === "anthropic" ? "Anthropic" : "OpenAI";
+        console.log(chalk.red(`🔧 [VERBOSE] ${providerName} API Error:`));
         console.log(chalk.red(`  Duration before error: ${duration}ms`));
         console.log(chalk.red(`  Error type: ${error.constructor.name}`));
         console.log(chalk.red(`  Error message: ${error.message}`));
@@ -565,16 +665,24 @@ export class AIProcessor {
               "\n💡 [VERBOSE] This appears to be a quota/billing issue:"
             )
           );
-          console.log(
-            chalk.yellow(
-              "   • Check your OpenAI account billing: https://platform.openai.com/account/billing"
-            )
-          );
-          console.log(
-            chalk.yellow(
-              "   • Verify your usage limits: https://platform.openai.com/account/usage"
-            )
-          );
+          if (this.config.provider === "anthropic") {
+            console.log(
+              chalk.yellow(
+                "   • Check your Anthropic account: https://console.anthropic.com/settings/billing"
+              )
+            );
+          } else {
+            console.log(
+              chalk.yellow(
+                "   • Check your OpenAI account billing: https://platform.openai.com/account/billing"
+              )
+            );
+            console.log(
+              chalk.yellow(
+                "   • Verify your usage limits: https://platform.openai.com/account/usage"
+              )
+            );
+          }
           console.log(
             chalk.yellow("   • Consider upgrading your plan if needed")
           );

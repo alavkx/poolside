@@ -4,7 +4,7 @@ import { generateText } from "ai";
 import ora from "ora";
 import chalk from "chalk";
 import type { AIProcessor } from "./ai-processor.js";
-import type { DiffSummary } from "./slack-client.js";
+import type { DiffSummary, ChangeItem, CommitMeta } from "./slack-client.js";
 
 const execAsync = promisify(exec);
 
@@ -159,16 +159,27 @@ function parseStatOutput(statOutput: string): FileChange[] {
 }
 
 /**
- * Parse the output of git log --oneline into commit info
+ * Parse the output of git log with custom format into commit info
+ * Format expected: "hash|author|message" (using | as delimiter)
  */
 function parseLogOutput(logOutput: string): CommitInfo[] {
   const commits: CommitInfo[] = [];
   const lines = logOutput.split("\n").filter((line) => line.trim());
 
   for (const line of lines) {
-    const match = line.match(/^([a-f0-9]+)\s+(.+)$/);
-    if (match) {
-      commits.push({ hash: match[1], message: match[2] });
+    // Try to parse the new format: hash|author|message
+    const parts = line.split("|");
+    if (parts.length >= 3) {
+      const hash = parts[0].trim();
+      const author = parts[1].trim();
+      const message = parts.slice(2).join("|").trim(); // Message may contain |
+      commits.push({ hash, message, author });
+    } else {
+      // Fallback to old format: hash message
+      const match = line.match(/^([a-f0-9]+)\s+(.+)$/);
+      if (match) {
+        commits.push({ hash: match[1], message: match[2] });
+      }
     }
   }
 
@@ -258,10 +269,11 @@ export async function getDiffFromRange(
       opts.verbose
     );
 
-    // Get commit log for the range
+    // Get commit log for the range with author info
+    // Format: hash|author|message
     const logRange = range.includes("...") ? range : range.replace("..", "...");
     const logOutput = await runGitCommand(
-      `log --oneline ${logRange}`,
+      `log --format="%h|%an|%s" ${logRange}`,
       opts.repoPath,
       opts.verbose
     );
@@ -406,7 +418,13 @@ ${
 
 Analyze these changes and describe what USERS can now do differently. Write for Customer Success teams who need to communicate value to customers.
 
-Categorize impacts as:
+Your response must include TWO parts:
+
+### Part 1: Overview
+Write a 1-3 sentence high-level summary of the overall changes. This should give readers a quick understanding of what this release/diff is about without reading the details.
+
+### Part 2: Detailed Changes
+Categorize specific impacts as:
 
 1. **features** - New things users can now do (start with "You can now...")
 2. **fixes** - Problems that no longer affect user workflows
@@ -414,34 +432,78 @@ Categorize impacts as:
 4. **breaking** - Changes users need to know about or take action on
 5. **other** - Other workflow changes worth mentioning
 
-CRITICAL GUIDELINES FOR CS-FOCUSED OUTPUT:
+For EACH change item, provide:
+- **title**: A short headline (3-6 words) that captures the essence of the change
+- **description**: What changed from the user's perspective (1-2 sentences)
+- **observe**: How a user can see or verify this change in the product (e.g., "Navigate to Settings > Integrations", "Open a new project and look for...", "Try exporting a file and notice...")
+
+CRITICAL GUIDELINES:
 - Write from the USER'S perspective, not the developer's
-- Use workflow-focused language: "You can now...", "Your [workflow] is now...", "When you [action], you'll now..."
 - Focus on WORKFLOW IMPACT: How does this change the user's day-to-day experience?
 - EXCLUDE: CI/CD changes, internal refactoring, test updates, documentation changes, dependency updates (unless security-related)
 - Be specific about which workflows are affected when possible
 - Use plain English - avoid technical jargon
-- Consolidate related changes into single, meaningful entries
+- The "observe" field should be actionable - tell users exactly where to look or what to try
 - If no customer-facing changes are found in a category, return an empty array for that category
 
-LANGUAGE EXAMPLES:
-- Instead of: "Added export functionality for reports"
-  Write: "You can now export reports directly from the dashboard"
-- Instead of: "Fixed null pointer exception in user service"
-  Write: "Login issues that sometimes occurred during peak hours are now resolved"
-- Instead of: "Improved database query performance"
-  Write: "Your searches and filters now return results faster"
+DEDUPLICATION RULES (IMPORTANT):
+- Each distinct change should appear ONLY ONCE across all categories
+- Aggressively consolidate related changes into a single entry
+- If multiple commits touch the same feature, summarize as ONE entry
+- Never repeat the same information with different wording
+- Prefer fewer, high-quality entries over many similar ones
+- When in doubt, consolidate rather than list separately
+
+TONE: Professional and concise. No marketing fluff. State what changed clearly.
 
 Return your analysis as a JSON object with this exact structure:
 {
-  "features": ["You can now...", "You can now..."],
-  "fixes": ["Your [workflow] no longer..."],
-  "improvements": ["Your [workflow] is now faster/easier..."],
+  "overview": "High-level summary of what changed in this release.",
+  "features": [
+    { "title": "New X Capability", "description": "You can now do X, making your workflow faster.", "observe": "Navigate to the X page and click the new button" }
+  ],
+  "fixes": [
+    { "title": "Y Workflow Fixed", "description": "Fixed issue where Y happened unexpectedly.", "observe": "Try the workflow that previously caused Y - it now works correctly" }
+  ],
+  "improvements": [
+    { "title": "Faster Z Performance", "description": "Enhanced Z for better performance.", "observe": "Open Z and notice faster load times" }
+  ],
   "breaking": [],
   "other": []
 }
 
 Only return the JSON object, no additional text or markdown.`;
+}
+
+/**
+ * Normalize a change item - handles both string and object formats
+ */
+function normalizeChangeItem(
+  item: string | ChangeItem | Record<string, unknown>
+): ChangeItem {
+  if (typeof item === "string") {
+    return { title: "Update", description: item };
+  }
+  if (typeof item === "object" && item !== null) {
+    const obj = item as Record<string, unknown>;
+    const description = String(obj.description || obj.desc || "");
+    return {
+      title: String(obj.title || "Update"),
+      description,
+      observe: obj.observe ? String(obj.observe) : undefined,
+    };
+  }
+  return { title: "Update", description: String(item) };
+}
+
+/**
+ * Normalize an array of change items
+ */
+function normalizeChangeItems(items: unknown): ChangeItem[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map(normalizeChangeItem)
+    .filter((item) => item.description.length > 0);
 }
 
 /**
@@ -460,13 +522,13 @@ function parseAIResponse(response: string): DiffSummary {
     const parsed = JSON.parse(jsonStr);
 
     return {
-      features: Array.isArray(parsed.features) ? parsed.features : [],
-      fixes: Array.isArray(parsed.fixes) ? parsed.fixes : [],
-      improvements: Array.isArray(parsed.improvements)
-        ? parsed.improvements
-        : [],
-      breaking: Array.isArray(parsed.breaking) ? parsed.breaking : [],
-      other: Array.isArray(parsed.other) ? parsed.other : [],
+      overview:
+        typeof parsed.overview === "string" ? parsed.overview : undefined,
+      features: normalizeChangeItems(parsed.features),
+      fixes: normalizeChangeItems(parsed.fixes),
+      improvements: normalizeChangeItems(parsed.improvements),
+      breaking: normalizeChangeItems(parsed.breaking),
+      other: normalizeChangeItems(parsed.other),
     };
   } catch {
     console.warn(
@@ -490,6 +552,12 @@ function extractTextSections(response: string): DiffSummary {
     other: [],
   };
 
+  // Try to extract overview from the beginning of the response
+  const overviewMatch = response.match(/overview:?\s*([^\n]+)/i);
+  if (overviewMatch) {
+    result.overview = overviewMatch[1].trim();
+  }
+
   type ArrayKeys = "features" | "fixes" | "improvements" | "breaking" | "other";
   const sections: Record<ArrayKeys, RegExp> = {
     features:
@@ -509,7 +577,8 @@ function extractTextSections(response: string): DiffSummary {
       const items = match[1]
         .split("\n")
         .map((line) => line.replace(/^[-•*]\s*/, "").trim())
-        .filter((line) => line.length > 0);
+        .filter((line) => line.length > 0)
+        .map((line) => ({ title: "Update", description: line }));
       result[key] = items;
     }
   }
@@ -523,7 +592,7 @@ function extractTextSections(response: string): DiffSummary {
 export async function generateDiffSummary(
   diffData: DiffData,
   aiProcessor: AIProcessor,
-  options: { verbose?: boolean } = {}
+  options: { verbose?: boolean; repoUrl?: string } = {}
 ): Promise<DiffSummary> {
   const spinner = ora("Analyzing changes with AI...").start();
 
@@ -554,6 +623,27 @@ export async function generateDiffSummary(
     }
 
     const summary = parseAIResponse(text);
+
+    // Add commit metadata to the summary
+    summary.commits = diffData.commits.map((commit) => {
+      const commitMeta: CommitMeta = {
+        sha: commit.hash,
+        message: commit.message,
+        author: commit.author || "Unknown",
+      };
+      // Add commit URL if repo URL is provided
+      if (options.repoUrl) {
+        commitMeta.url = `${options.repoUrl.replace(/\/$/, "")}/commit/${
+          commit.hash
+        }`;
+      }
+      return commitMeta;
+    });
+
+    if (options.repoUrl) {
+      summary.repoUrl = options.repoUrl;
+    }
+
     const totalItems =
       (summary.features?.length || 0) +
       (summary.fixes?.length || 0) +
@@ -589,20 +679,64 @@ function logVerboseSummary(summary: DiffSummary): void {
 }
 
 /**
- * Add items to sections array with prefix
+ * Format a single change item for text output with elegant header style
+ */
+function formatChangeItemText(item: ChangeItem): string[] {
+  const lines: string[] = [];
+  lines.push(`  ┌─ ${item.title}`);
+  lines.push(`  │`);
+  // Word wrap description at ~70 chars
+  const wrapped = wrapText(item.description, 66);
+  for (const line of wrapped) {
+    lines.push(`  │  ${line}`);
+  }
+  if (item.observe) {
+    lines.push(`  │`);
+    lines.push(`  │  How to observe:`);
+    const observeWrapped = wrapText(item.observe, 66);
+    for (const line of observeWrapped) {
+      lines.push(`  │  ${line}`);
+    }
+  }
+  lines.push(`  └─`);
+  return lines;
+}
+
+/**
+ * Simple word wrap utility
+ */
+function wrapText(text: string, maxWidth: number): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    if (currentLine.length + word.length + 1 <= maxWidth) {
+      currentLine += (currentLine ? " " : "") + word;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines;
+}
+
+/**
+ * Add items to sections array with elegant formatting
  */
 function addSection(
   sections: string[],
   title: string,
-  items: string[] | undefined,
-  prefix: string
+  items: ChangeItem[] | undefined
 ): void {
   if (items && items.length > 0) {
     sections.push(title);
-    for (const item of items) {
-      sections.push(`${prefix}${item}`);
-    }
     sections.push("");
+    for (const item of items) {
+      sections.push(...formatChangeItemText(item));
+      sections.push("");
+    }
   }
 }
 
@@ -617,17 +751,85 @@ export function formatAsText(summary: DiffSummary): string {
     sections.push("");
   }
 
-  addSection(sections, "⚠️  BREAKING CHANGES:", summary.breaking, "  • ");
-  addSection(sections, "✨ Features:", summary.features, "  • ");
-  addSection(sections, "🐛 Fixes:", summary.fixes, "  • ");
-  addSection(sections, "💪 Improvements:", summary.improvements, "  • ");
-  addSection(sections, "📝 Other:", summary.other, "  • ");
+  // Add overview section
+  if (summary.overview) {
+    sections.push("OVERVIEW");
+    sections.push("─".repeat(50));
+    const overviewWrapped = wrapText(summary.overview, 70);
+    for (const line of overviewWrapped) {
+      sections.push(line);
+    }
+    sections.push("");
+  }
 
-  if (sections.length === 0) {
+  // Add commits section
+  if (summary.commits && summary.commits.length > 0) {
+    sections.push("COMMITS");
+    sections.push("─".repeat(50));
+    for (const commit of summary.commits) {
+      const shaDisplay = commit.url
+        ? `${commit.sha} (${commit.url})`
+        : commit.sha;
+      sections.push(`  ${shaDisplay}`);
+      sections.push(`  │ ${commit.message}`);
+      sections.push(`  └─ by ${commit.author}`);
+      sections.push("");
+    }
+  }
+
+  addSection(sections, "BREAKING CHANGES", summary.breaking);
+  addSection(sections, "FEATURES", summary.features);
+  addSection(sections, "FIXES", summary.fixes);
+  addSection(sections, "IMPROVEMENTS", summary.improvements);
+  addSection(sections, "OTHER", summary.other);
+
+  const hasContent =
+    summary.overview ||
+    (summary.commits && summary.commits.length > 0) ||
+    (summary.breaking && summary.breaking.length > 0) ||
+    (summary.features && summary.features.length > 0) ||
+    (summary.fixes && summary.fixes.length > 0) ||
+    (summary.improvements && summary.improvements.length > 0) ||
+    (summary.other && summary.other.length > 0);
+
+  if (!hasContent) {
     sections.push("No customer-facing changes detected.");
   }
 
   return sections.join("\n");
+}
+
+/**
+ * Format a single change item for markdown output
+ */
+function formatChangeItemMarkdown(item: ChangeItem): string[] {
+  const lines: string[] = [];
+  lines.push(`### ${item.title}`);
+  lines.push("");
+  lines.push(item.description);
+  if (item.observe) {
+    lines.push("");
+    lines.push(`> **How to observe:** ${item.observe}`);
+  }
+  lines.push("");
+  return lines;
+}
+
+/**
+ * Add items to sections array for markdown format
+ */
+function addSectionMarkdown(
+  sections: string[],
+  title: string,
+  items: ChangeItem[] | undefined
+): void {
+  if (items && items.length > 0) {
+    sections.push(title);
+    sections.push("");
+    for (const item of items) {
+      sections.push(...formatChangeItemMarkdown(item));
+    }
+  }
 }
 
 /**
@@ -646,13 +848,46 @@ export function formatAsMarkdown(summary: DiffSummary): string {
     sections.push("");
   }
 
-  addSection(sections, "## ⚠️ Breaking Changes", summary.breaking, "- ");
-  addSection(sections, "## ✨ Features", summary.features, "- ");
-  addSection(sections, "## 🐛 Fixes", summary.fixes, "- ");
-  addSection(sections, "## 💪 Improvements", summary.improvements, "- ");
-  addSection(sections, "## 📝 Other", summary.other, "- ");
+  // Add overview section
+  if (summary.overview) {
+    sections.push("## Overview");
+    sections.push(summary.overview);
+    sections.push("");
+  }
 
-  if (sections.length === 0 || (sections.length === 1 && summary.title)) {
+  // Add commits section
+  if (summary.commits && summary.commits.length > 0) {
+    sections.push("## Commits");
+    sections.push("");
+    sections.push("| SHA | Description | Author |");
+    sections.push("|-----|-------------|--------|");
+    for (const commit of summary.commits) {
+      const shaDisplay = commit.url
+        ? `[\`${commit.sha}\`](${commit.url})`
+        : `\`${commit.sha}\``;
+      // Escape pipe characters in message
+      const escapedMessage = commit.message.replace(/\|/g, "\\|");
+      sections.push(`| ${shaDisplay} | ${escapedMessage} | ${commit.author} |`);
+    }
+    sections.push("");
+  }
+
+  addSectionMarkdown(sections, "## Breaking Changes", summary.breaking);
+  addSectionMarkdown(sections, "## Features", summary.features);
+  addSectionMarkdown(sections, "## Fixes", summary.fixes);
+  addSectionMarkdown(sections, "## Improvements", summary.improvements);
+  addSectionMarkdown(sections, "## Other", summary.other);
+
+  const hasContent =
+    summary.overview ||
+    (summary.commits && summary.commits.length > 0) ||
+    (summary.breaking && summary.breaking.length > 0) ||
+    (summary.features && summary.features.length > 0) ||
+    (summary.fixes && summary.fixes.length > 0) ||
+    (summary.improvements && summary.improvements.length > 0) ||
+    (summary.other && summary.other.length > 0);
+
+  if (!hasContent) {
     sections.push("*No customer-facing changes detected.*");
   }
 
@@ -671,9 +906,17 @@ export function formatAsJson(summary: DiffSummary): string {
  */
 export class DiffGenerator {
   private options: Required<DiffOptions>;
+  private repoUrl?: string;
 
   constructor(options: DiffOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
+  }
+
+  /**
+   * Set the repository URL for generating commit links
+   */
+  setRepoUrl(url: string): void {
+    this.repoUrl = url;
   }
 
   /**
@@ -692,6 +935,7 @@ export class DiffGenerator {
   ): Promise<DiffSummary> {
     return generateDiffSummary(diffData, aiProcessor, {
       verbose: this.options.verbose,
+      repoUrl: this.repoUrl,
     });
   }
 

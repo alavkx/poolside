@@ -74,9 +74,19 @@ aaa9012 chore: update deps`;
     it("should format a summary with all sections", () => {
       const summary: DiffSummary = {
         title: "Test Release",
-        features: ["You can now do X", "You can now do Y"],
-        fixes: ["Fixed issue Z"],
-        improvements: ["Performance improved"],
+        overview: "This release includes new features and bug fixes.",
+        features: [
+          {
+            title: "New X Feature",
+            description: "You can now do X",
+            observe: "Go to Settings to see it",
+          },
+          { title: "New Y Feature", description: "You can now do Y" },
+        ],
+        fixes: [{ title: "Issue Z Fixed", description: "Fixed issue Z" }],
+        improvements: [
+          { title: "Better Performance", description: "Performance improved" },
+        ],
         breaking: [],
         other: [],
       };
@@ -84,19 +94,28 @@ aaa9012 chore: update deps`;
       const output = formatAsText(summary);
 
       expect(output).toContain("# Test Release");
-      expect(output).toContain("✨ Features:");
+      expect(output).toContain("OVERVIEW");
+      expect(output).toContain(
+        "This release includes new features and bug fixes."
+      );
+      expect(output).toContain("FEATURES");
+      expect(output).toContain("New X Feature");
       expect(output).toContain("You can now do X");
-      expect(output).toContain("You can now do Y");
-      expect(output).toContain("🐛 Fixes:");
+      expect(output).toContain("How to observe:");
+      expect(output).toContain("Go to Settings to see it");
+      expect(output).toContain("New Y Feature");
+      expect(output).toContain("FIXES");
       expect(output).toContain("Fixed issue Z");
-      expect(output).toContain("💪 Improvements:");
+      expect(output).toContain("IMPROVEMENTS");
       expect(output).toContain("Performance improved");
     });
 
     it("should show breaking changes first", () => {
       const summary: DiffSummary = {
-        features: ["New feature"],
-        breaking: ["Breaking change here"],
+        features: [{ title: "New Feature", description: "New feature" }],
+        breaking: [
+          { title: "API Change", description: "Breaking change here" },
+        ],
         fixes: [],
         improvements: [],
         other: [],
@@ -104,7 +123,7 @@ aaa9012 chore: update deps`;
 
       const output = formatAsText(summary);
       const breakingIndex = output.indexOf("BREAKING CHANGES");
-      const featuresIndex = output.indexOf("Features:");
+      const featuresIndex = output.indexOf("FEATURES");
 
       expect(breakingIndex).toBeLessThan(featuresIndex);
     });
@@ -130,8 +149,15 @@ aaa9012 chore: update deps`;
         title: "Release 1.0",
         prNumber: 123,
         prUrl: "https://github.com/test/repo/pull/123",
-        features: ["Feature one"],
-        fixes: ["Fix one"],
+        overview: "A major release with new features.",
+        features: [
+          {
+            title: "Feature One",
+            description: "Feature one description",
+            observe: "Check the dashboard",
+          },
+        ],
+        fixes: [{ title: "Fix One", description: "Fix one description" }],
         improvements: [],
         breaking: [],
         other: [],
@@ -142,15 +168,19 @@ aaa9012 chore: update deps`;
       expect(output).toContain("# Release 1.0");
       expect(output).toContain("[#123]");
       expect(output).toContain("https://github.com/test/repo/pull/123");
-      expect(output).toContain("## ✨ Features");
-      expect(output).toContain("- Feature one");
-      expect(output).toContain("## 🐛 Fixes");
-      expect(output).toContain("- Fix one");
+      expect(output).toContain("## Overview");
+      expect(output).toContain("A major release with new features.");
+      expect(output).toContain("## Features");
+      expect(output).toContain("### Feature One");
+      expect(output).toContain("Feature one description");
+      expect(output).toContain("**How to observe:** Check the dashboard");
+      expect(output).toContain("## Fixes");
+      expect(output).toContain("### Fix One");
     });
 
     it("should handle summary without PR info", () => {
       const summary: DiffSummary = {
-        features: ["Just a feature"],
+        features: [{ title: "Just a Feature", description: "Just a feature" }],
         fixes: [],
         improvements: [],
         breaking: [],
@@ -160,7 +190,7 @@ aaa9012 chore: update deps`;
       const output = formatAsMarkdown(summary);
 
       expect(output).not.toContain("PR #");
-      expect(output).toContain("- Just a feature");
+      expect(output).toContain("### Just a Feature");
     });
   });
 
@@ -168,8 +198,15 @@ aaa9012 chore: update deps`;
     it("should return valid JSON", () => {
       const summary: DiffSummary = {
         title: "Test",
-        features: ["Feature 1"],
-        fixes: ["Fix 1"],
+        overview: "Test overview",
+        features: [
+          {
+            title: "Feature 1",
+            description: "Feature 1 desc",
+            observe: "Try feature 1",
+          },
+        ],
+        fixes: [{ title: "Fix 1", description: "Fix 1 desc" }],
         improvements: [],
         breaking: [],
         other: [],
@@ -179,8 +216,17 @@ aaa9012 chore: update deps`;
       const parsed = JSON.parse(output);
 
       expect(parsed.title).toBe("Test");
-      expect(parsed.features).toEqual(["Feature 1"]);
-      expect(parsed.fixes).toEqual(["Fix 1"]);
+      expect(parsed.overview).toBe("Test overview");
+      expect(parsed.features).toEqual([
+        {
+          title: "Feature 1",
+          description: "Feature 1 desc",
+          observe: "Try feature 1",
+        },
+      ]);
+      expect(parsed.fixes).toEqual([
+        { title: "Fix 1", description: "Fix 1 desc" },
+      ]);
     });
   });
 
@@ -303,9 +349,22 @@ describe("Slack Client", () => {
         title: "Add user feature",
         prNumber: 42,
         prUrl: "https://github.com/test/repo/pull/42",
-        features: ["You can now manage users"],
-        fixes: ["Login no longer fails"],
-        improvements: ["Faster search"],
+        overview: "This release adds user management and improves search.",
+        features: [
+          {
+            title: "User Management",
+            description: "You can now manage users",
+            observe: "Go to Admin > Users",
+          },
+        ],
+        fixes: [{ title: "Login Fix", description: "Login no longer fails" }],
+        improvements: [
+          {
+            title: "Search Speed",
+            description: "Faster search",
+            observe: "Try a search query",
+          },
+        ],
         breaking: [],
         other: [],
       };
@@ -318,9 +377,20 @@ describe("Slack Client", () => {
       expect(message.blocks).toBeDefined();
       expect(message.blocks!.length).toBeGreaterThan(0);
 
-      // Check for header with PR number
-      const headerBlock = message.blocks!.find((b) => b.type === "header");
-      expect(headerBlock).toBeDefined();
+      // Check for headline section (first block with bold text)
+      const firstSection = message.blocks!.find((b) => b.type === "section");
+      expect(firstSection).toBeDefined();
+
+      // Check for overview in blocks
+      const blockTexts = message
+        .blocks!.filter(
+          (b): b is { type: "section"; text: { text: string } } =>
+            b.type === "section"
+        )
+        .map((b) => b.text.text);
+      expect(
+        blockTexts.some((t) => t.includes("This release adds user management"))
+      ).toBe(true);
     });
 
     it("should include breaking changes with warning", () => {
@@ -328,7 +398,13 @@ describe("Slack Client", () => {
         features: [],
         fixes: [],
         improvements: [],
-        breaking: ["API endpoint changed"],
+        breaking: [
+          {
+            title: "API Change",
+            description: "API endpoint changed",
+            observe: "Update your API calls",
+          },
+        ],
         other: [],
       };
 
@@ -341,7 +417,7 @@ describe("Slack Client", () => {
         .map((b) => b.text.text);
 
       const hasBreaking = blockTexts.some(
-        (text) => text.includes("Breaking") && text.includes("API endpoint")
+        (text) => text.includes("Breaking") || text.includes("API endpoint")
       );
       expect(hasBreaking).toBe(true);
     });
@@ -365,7 +441,7 @@ describe("Slack Client", () => {
         title: "Test PR",
         prNumber: 1,
         prUrl: "https://github.com/test/repo/pull/1",
-        features: ["New feature"],
+        features: [{ title: "New Feature", description: "New feature" }],
         fixes: [],
         improvements: [],
         breaking: [],
@@ -383,6 +459,39 @@ describe("Slack Client", () => {
       expect(sectionWithButton?.accessory?.url).toBe(
         "https://github.com/test/repo/pull/1"
       );
+    });
+
+    it("should format change items with title and observe instructions", () => {
+      const summary: DiffSummary = {
+        features: [
+          {
+            title: "New Dashboard",
+            description: "A brand new dashboard experience",
+            observe: "Navigate to /dashboard",
+          },
+        ],
+        fixes: [],
+        improvements: [],
+        breaking: [],
+        other: [],
+      };
+
+      const message = SlackClient.formatDiffSummary(summary);
+      const blockTexts = message
+        .blocks!.filter(
+          (b): b is { type: "section"; text: { text: string } } =>
+            b.type === "section"
+        )
+        .map((b) => b.text.text);
+
+      const hasTitle = blockTexts.some((text) =>
+        text.includes("New Dashboard")
+      );
+      const hasObserve = blockTexts.some((text) =>
+        text.includes("Navigate to /dashboard")
+      );
+      expect(hasTitle).toBe(true);
+      expect(hasObserve).toBe(true);
     });
   });
 

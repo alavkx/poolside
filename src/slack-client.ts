@@ -79,15 +79,37 @@ export interface SlackMessage {
   unfurl_media?: boolean;
 }
 
+/**
+ * A single change item with description and how to observe it in the product
+ */
+export interface ChangeItem {
+  title: string; // Short headline for the change (3-6 words)
+  description: string; // Full description of what changed
+  observe?: string; // How to observe/verify this change in the product
+}
+
+/**
+ * Commit metadata for display in diff summaries
+ */
+export interface CommitMeta {
+  sha: string;
+  message: string;
+  author: string;
+  url?: string; // Optional link to the commit on GitHub/GitLab
+}
+
 export interface DiffSummary {
   title?: string;
   prNumber?: number;
   prUrl?: string;
-  features?: string[];
-  fixes?: string[];
-  improvements?: string[];
-  breaking?: string[];
-  other?: string[];
+  repoUrl?: string; // Base repo URL for generating commit links
+  overview?: string; // High-level summary of what changed
+  commits?: CommitMeta[]; // Commit metadata
+  features?: ChangeItem[];
+  fixes?: ChangeItem[];
+  improvements?: ChangeItem[];
+  breaking?: ChangeItem[];
+  other?: ChangeItem[];
 }
 
 export interface SlackClientConfig {
@@ -221,22 +243,72 @@ export class SlackClient {
   }
 
   /**
+   * Format a change item for Slack display
+   */
+  private static formatChangeItem(item: ChangeItem): string {
+    const lines = [`*${item.title}*`, `${item.description}`];
+    if (item.observe) {
+      lines.push(`_→ ${item.observe}_`);
+    }
+    return lines.join("\n");
+  }
+
+  /**
+   * Generate a short headline from the overview or commit messages
+   */
+  private static generateShortHeadline(summary: DiffSummary): string {
+    // Try to get a short headline from the overview
+    if (summary.overview) {
+      // Take first sentence or first ~50 chars
+      const firstSentence = summary.overview.split(/[.!?]/)[0].trim();
+      if (firstSentence.length <= 50) {
+        return firstSentence;
+      }
+      // Truncate at word boundary
+      const truncated = firstSentence.substring(0, 47).replace(/\s+\S*$/, "");
+      return `${truncated}...`;
+    }
+
+    // Fall back to first commit message
+    if (summary.commits && summary.commits.length > 0) {
+      const msg = summary.commits[0].message;
+      if (msg.length <= 50) {
+        return msg;
+      }
+      const truncated = msg.substring(0, 47).replace(/\s+\S*$/, "");
+      return `${truncated}...`;
+    }
+
+    // Last resort
+    return "Code Changes";
+  }
+
+  /**
    * Format a diff summary as Slack blocks
    */
   static formatDiffSummary(summary: DiffSummary): SlackMessage {
     const blocks: SlackBlock[] = [];
 
-    // Header with PR info
-    const headerText = summary.prNumber
-      ? `🔄 What's Changed (PR #${summary.prNumber})`
-      : "🔄 What's Changed";
+    // Generate short headline with commit link
+    const headline = SlackClient.generateShortHeadline(summary);
+    const latestCommit = summary.commits?.[0];
 
-    blocks.push(SlackClient.header(headerText));
+    // Build header with commit link in parentheses
+    let headerText = headline;
+    if (latestCommit) {
+      const shaDisplay = latestCommit.url
+        ? `<${latestCommit.url}|${latestCommit.sha}>`
+        : latestCommit.sha;
+      headerText = `${headline} (${shaDisplay})`;
+    }
+
+    // Slack headers don't support links, so use a section with bold text instead
+    blocks.push(SlackClient.section(`*${headerText}*`));
 
     if (summary.title) {
       blocks.push(
         SlackClient.section(
-          `*${summary.title}*`,
+          summary.title,
           summary.prUrl
             ? SlackClient.buttonAccessory("View PR", summary.prUrl, "view_pr")
             : undefined
@@ -244,57 +316,71 @@ export class SlackClient {
       );
     }
 
+    // Overview section
+    if (summary.overview) {
+      blocks.push(SlackClient.section(summary.overview));
+    }
+
+    // Commits section
+    if (summary.commits && summary.commits.length > 0) {
+      blocks.push(SlackClient.divider());
+      blocks.push(SlackClient.section("*Commits*"));
+
+      const commitLines = summary.commits.map((commit) => {
+        const shaDisplay = commit.url
+          ? `<${commit.url}|\`${commit.sha}\`>`
+          : `\`${commit.sha}\``;
+        return `${shaDisplay} ${commit.message} — _${commit.author}_`;
+      });
+
+      // Group commits in batches to avoid Slack block limits
+      const maxCommitsPerBlock = 10;
+      for (let i = 0; i < commitLines.length; i += maxCommitsPerBlock) {
+        const batch = commitLines.slice(i, i + maxCommitsPerBlock);
+        blocks.push(SlackClient.section(batch.join("\n")));
+      }
+    }
+
     blocks.push(SlackClient.divider());
 
-    // Breaking changes (most important - show first with warning)
+    // Breaking changes (most important - show first)
     if (summary.breaking && summary.breaking.length > 0) {
-      blocks.push(
-        SlackClient.section(
-          `⚠️ *Breaking Changes:*\n${summary.breaking
-            .map((item) => `• ${item}`)
-            .join("\n")}`
-        )
-      );
+      blocks.push(SlackClient.section("*Breaking Changes*"));
+      for (const item of summary.breaking) {
+        blocks.push(SlackClient.section(SlackClient.formatChangeItem(item)));
+      }
     }
 
     // Features
     if (summary.features && summary.features.length > 0) {
-      blocks.push(
-        SlackClient.section(
-          `✨ *Features:*\n${summary.features
-            .map((item) => `• ${item}`)
-            .join("\n")}`
-        )
-      );
+      blocks.push(SlackClient.section("*Features*"));
+      for (const item of summary.features) {
+        blocks.push(SlackClient.section(SlackClient.formatChangeItem(item)));
+      }
     }
 
     // Fixes
     if (summary.fixes && summary.fixes.length > 0) {
-      blocks.push(
-        SlackClient.section(
-          `🐛 *Fixes:*\n${summary.fixes.map((item) => `• ${item}`).join("\n")}`
-        )
-      );
+      blocks.push(SlackClient.section("*Fixes*"));
+      for (const item of summary.fixes) {
+        blocks.push(SlackClient.section(SlackClient.formatChangeItem(item)));
+      }
     }
 
     // Improvements
     if (summary.improvements && summary.improvements.length > 0) {
-      blocks.push(
-        SlackClient.section(
-          `💪 *Improvements:*\n${summary.improvements
-            .map((item) => `• ${item}`)
-            .join("\n")}`
-        )
-      );
+      blocks.push(SlackClient.section("*Improvements*"));
+      for (const item of summary.improvements) {
+        blocks.push(SlackClient.section(SlackClient.formatChangeItem(item)));
+      }
     }
 
     // Other changes
     if (summary.other && summary.other.length > 0) {
-      blocks.push(
-        SlackClient.section(
-          `📝 *Other:*\n${summary.other.map((item) => `• ${item}`).join("\n")}`
-        )
-      );
+      blocks.push(SlackClient.section("*Other*"));
+      for (const item of summary.other) {
+        blocks.push(SlackClient.section(SlackClient.formatChangeItem(item)));
+      }
     }
 
     // If no categorized changes, show a message
@@ -321,7 +407,7 @@ export class SlackClient {
       fallbackParts.push(`${summary.improvements.length} improvement(s)`);
 
     const fallbackText = hasChanges
-      ? `What's Changed: ${fallbackParts.join(", ")}`
+      ? `${headline}: ${fallbackParts.join(", ")}`
       : "No customer-facing changes detected";
 
     return {

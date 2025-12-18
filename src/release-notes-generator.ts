@@ -7,6 +7,7 @@ import {
   type ReleaseNotesData,
 } from "./ai-processor.js";
 import { MarkdownGenerator } from "./markdown-generator.js";
+import { type ModelResolutionOptions } from "./model-config.js";
 import chalk from "chalk";
 import ora from "ora";
 
@@ -39,6 +40,7 @@ export interface MultiRepoConfig {
   repositories: RepositoryConfig[];
   jiraConfig: JiraConfig;
   verbose?: boolean;
+  presetOptions?: ModelResolutionOptions;
 }
 
 export interface RepoData {
@@ -83,6 +85,7 @@ export async function generateMultiRepoReleaseNotes(
     repositories,
     jiraConfig,
     verbose = false,
+    presetOptions,
   } = config;
 
   const targetMonth = releaseConfig.month || getCurrentMonth();
@@ -93,7 +96,6 @@ export async function generateMultiRepoReleaseNotes(
   console.log(chalk.gray(`Target Month: ${targetMonth}`));
   console.log(chalk.gray(`Output File: ${outputFile}`));
   console.log(chalk.gray(`Repositories: ${repositories.length}`));
-  console.log(chalk.gray(`AI Model: ${aiConfig.model}`));
 
   const overallSpinner = ora("Initializing multi-repo processing...").start();
 
@@ -101,11 +103,24 @@ export async function generateMultiRepoReleaseNotes(
     // Initialize clients
     const githubClient = new GitHubClient(process.env.POOLSIDE_GITHUB_TOKEN!);
     const jiraClient = await createJiraClient(jiraConfig, verbose);
-    const aiProcessor = new AIProcessor(
-      process.env.POOLSIDE_OPENAI_API_KEY!,
+
+    // Create AI processor with preset resolution
+    const aiProcessor = await AIProcessor.createWithPreset(
       verbose,
-      aiConfig
+      aiConfig,
+      presetOptions || {}
     );
+
+    const resolvedModel = aiProcessor.getResolvedModel();
+    if (resolvedModel) {
+      console.log(
+        chalk.gray(`AI Model: ${resolvedModel.provider}:${resolvedModel.model}`)
+      );
+      if (verbose) {
+        console.log(chalk.gray(`Model Source: ${resolvedModel.source}`));
+      }
+    }
+
     const markdownGenerator = new MarkdownGenerator();
 
     overallSpinner.succeed("Clients initialized successfully");

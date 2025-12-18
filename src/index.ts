@@ -17,6 +17,13 @@ import {
   formatAsJson,
 } from "./diff-generator.js";
 import { SlackClient } from "./slack-client.js";
+import {
+  ConfigManager,
+  BUILT_IN_PRESETS,
+  DEFAULT_PRESET,
+  type ModelPreset,
+  type AIProvider,
+} from "./model-config.js";
 
 dotenv.config();
 
@@ -35,6 +42,7 @@ interface WorkflowConfig {
     token?: string;
   };
   ai: {
+    provider: AIProvider;
     apiKey?: string;
     model: string;
     maxTokens: number;
@@ -74,10 +82,33 @@ interface ReleaseNotesConfig {
 
 type RequiredFor = "epic" | "release-notes" | "all";
 
+// Get the current AI provider from environment
+function getAIProvider(): AIProvider {
+  const provider = process.env.POOLSIDE_AI_PROVIDER?.toLowerCase();
+  if (provider === "anthropic") return "anthropic";
+  return "openai";
+}
+
+// Get the API key for the current provider
+function getAIApiKey(): string | undefined {
+  const provider = getAIProvider();
+  return provider === "anthropic"
+    ? process.env.POOLSIDE_ANTHROPIC_API_KEY
+    : process.env.POOLSIDE_OPENAI_API_KEY;
+}
+
 // Validate environment configuration
 function validateConfig(requiredFor: RequiredFor = "all"): void {
+  const provider = getAIProvider();
+  const apiKeyVar =
+    provider === "anthropic"
+      ? "POOLSIDE_ANTHROPIC_API_KEY"
+      : "POOLSIDE_OPENAI_API_KEY";
+  const apiKeyDesc =
+    provider === "anthropic" ? "Anthropic API Key" : "OpenAI API Key";
+
   const baseVars: Record<string, string> = {
-    POOLSIDE_OPENAI_API_KEY: "OpenAI API Key",
+    [apiKeyVar]: apiKeyDesc,
     POOLSIDE_AI_MODEL: "AI Model",
     POOLSIDE_AI_MAX_TOKENS: "AI Max Tokens",
   };
@@ -92,9 +123,9 @@ function validateConfig(requiredFor: RequiredFor = "all"): void {
     POOLSIDE_GITHUB_TOKEN: "GitHub Personal Access Token",
   };
 
-  // Only POOLSIDE_OPENAI_API_KEY is truly required - other vars are conditional
-  let requiredVars = {
-    POOLSIDE_OPENAI_API_KEY: baseVars.POOLSIDE_OPENAI_API_KEY,
+  // Only the selected provider's API key is truly required - other vars are conditional
+  let requiredVars: Record<string, string> = {
+    [apiKeyVar]: baseVars[apiKeyVar],
   };
   let optionalVars: typeof baseVars = {
     POOLSIDE_AI_MODEL: baseVars.POOLSIDE_AI_MODEL,
@@ -154,6 +185,11 @@ function validateConfig(requiredFor: RequiredFor = "all"): void {
     );
     console.log(
       chalk.gray(
+        "   • Anthropic API Key: https://console.anthropic.com/settings/keys"
+      )
+    );
+    console.log(
+      chalk.gray(
         "   • GitHub Token: https://github.com/settings/tokens (classic)"
       )
     );
@@ -197,6 +233,10 @@ function validateConfig(requiredFor: RequiredFor = "all"): void {
 }
 
 function createWorkflowConfig(): WorkflowConfig {
+  const provider = getAIProvider();
+  const defaultModel =
+    provider === "anthropic" ? "claude-sonnet-4-20250514" : "gpt-4o";
+
   return {
     jira: {
       host: process.env.POOLSIDE_JIRA_HOST?.replace(/^https?:\/\//, ""),
@@ -207,8 +247,9 @@ function createWorkflowConfig(): WorkflowConfig {
       token: process.env.POOLSIDE_GITHUB_TOKEN,
     },
     ai: {
-      apiKey: process.env.POOLSIDE_OPENAI_API_KEY,
-      model: process.env.POOLSIDE_AI_MODEL || "gpt-4o",
+      provider,
+      apiKey: getAIApiKey(),
+      model: process.env.POOLSIDE_AI_MODEL || defaultModel,
       maxTokens: Number.parseInt(process.env.POOLSIDE_AI_MAX_TOKENS || "4000"),
     },
     verbose: false,
@@ -299,6 +340,14 @@ program
   )
   .option("-c, --claimant <name>", "Name to use when claiming the ticket")
   .option("--dry-run", "Preview changes without actually claiming the ticket")
+  .option(
+    "--preset <name>",
+    "Use a named preset (e.g., fast, quality, balanced, cheap)"
+  )
+  .option(
+    "--model <provider:model>",
+    "Direct model override (e.g., anthropic:claude-3-haiku-20240307)"
+  )
   .option("--verbose", "Enable verbose logging for debugging")
   .action(
     async (
@@ -307,6 +356,8 @@ program
         agent: string;
         claimant?: string;
         dryRun?: boolean;
+        preset?: string;
+        model?: string;
         verbose?: boolean;
       }
     ) => {
@@ -356,6 +407,14 @@ program
   )
   .option("-c, --claimant <name>", "Name to use when claiming the issue")
   .option("--dry-run", "Preview changes without actually claiming the issue")
+  .option(
+    "--preset <name>",
+    "Use a named preset (e.g., fast, quality, balanced, cheap)"
+  )
+  .option(
+    "--model <provider:model>",
+    "Direct model override (e.g., anthropic:claude-3-haiku-20240307)"
+  )
   .option("--verbose", "Enable verbose logging for debugging")
   .action(
     async (
@@ -364,6 +423,8 @@ program
         agent: string;
         claimant?: string;
         dryRun?: boolean;
+        preset?: string;
+        model?: string;
         verbose?: boolean;
       }
     ) => {
@@ -499,12 +560,22 @@ program
   .requiredOption("-c, --config <file>", "Configuration file path (JSON)")
   .option("-m, --month <month>", "Override month from config (YYYY-MM)")
   .option("-o, --output <file>", "Override output file from config")
+  .option(
+    "--preset <name>",
+    "Use a named preset (e.g., fast, quality, balanced, cheap)"
+  )
+  .option(
+    "--model <provider:model>",
+    "Direct model override (e.g., anthropic:claude-3-haiku-20240307)"
+  )
   .option("--verbose", "Enable verbose logging for debugging")
   .action(
     async (options: {
       config: string;
       month?: string;
       output?: string;
+      preset?: string;
+      model?: string;
       verbose?: boolean;
     }) => {
       try {
@@ -548,6 +619,10 @@ program
         await generateMultiRepoReleaseNotes({
           ...config,
           verbose: options.verbose || false,
+          presetOptions: {
+            cliPreset: options.preset,
+            cliModel: options.model,
+          },
         });
 
         console.log(
@@ -577,6 +652,14 @@ program
   )
   .option("-o, --output <file>", "Output file", "release-notes.md")
   .option("--jira-base-url <url>", "JIRA base URL (overrides env var)")
+  .option(
+    "--preset <name>",
+    "Use a named preset (e.g., fast, quality, balanced, cheap)"
+  )
+  .option(
+    "--model <provider:model>",
+    "Direct model override (e.g., anthropic:claude-3-haiku-20240307)"
+  )
   .option("--verbose", "Enable verbose logging for debugging")
   .action(
     async (options: {
@@ -584,6 +667,8 @@ program
       month: string;
       output: string;
       jiraBaseUrl?: string;
+      preset?: string;
+      model?: string;
       verbose?: boolean;
     }) => {
       try {
@@ -632,6 +717,10 @@ program
         await generateMultiRepoReleaseNotes({
           ...legacyConfig,
           verbose: options.verbose || false,
+          presetOptions: {
+            cliPreset: options.preset,
+            cliModel: options.model,
+          },
         });
 
         console.log(chalk.green("✅ Release notes generated successfully!"));
@@ -645,15 +734,15 @@ program
     }
   );
 
-// What's the Diff Command - Analyze git diff and generate customer-focused summary
+// Diff Command - Analyze git diff and generate customer-focused summary
 program
-  .command("whats-the-diff")
+  .command("diff")
   .description(
     "Analyze a git diff and generate a customer-focused summary of changes"
   )
-  .requiredOption(
+  .option(
     "-r, --range <range>",
-    "Git range to analyze (e.g., main...HEAD, abc123..def456)"
+    "Git range to analyze (e.g., main...HEAD). Defaults to <baseline>...HEAD"
   )
   .option(
     "-s, --slack-webhook <url>",
@@ -669,54 +758,77 @@ program
     "Path to git repository (defaults to current directory)",
     process.cwd()
   )
+  .option(
+    "--repo-url <url>",
+    "Repository URL for generating commit links (e.g., https://github.com/owner/repo)"
+  )
   .option("--pr-number <number>", "PR number to include in the summary")
   .option("--pr-url <url>", "PR URL to include in the summary")
   .option("--title <title>", "Custom title for the summary")
+  .option(
+    "--preset <name>",
+    "Use a named preset (e.g., fast, quality, balanced, cheap)"
+  )
+  .option(
+    "--model <provider:model>",
+    "Direct model override (e.g., anthropic:claude-3-haiku-20240307)"
+  )
   .option("--verbose", "Enable verbose logging for debugging")
   .action(
     async (options: {
-      range: string;
+      range?: string;
       slackWebhook?: string;
       format: string;
       repoPath: string;
+      repoUrl?: string;
       prNumber?: string;
       prUrl?: string;
       title?: string;
+      preset?: string;
+      model?: string;
       verbose?: boolean;
     }) => {
       try {
-        // Only require OpenAI for this command
-        const apiKey = process.env.POOLSIDE_OPENAI_API_KEY;
-        if (!apiKey) {
-          console.error(
-            chalk.red(
-              "❌ Missing required configuration: POOLSIDE_OPENAI_API_KEY"
-            )
-          );
-          console.log(
-            chalk.gray(
-              "Set POOLSIDE_OPENAI_API_KEY environment variable or run 'poolside setup'"
-            )
-          );
-          process.exit(1);
-        }
-
         console.log(chalk.blue("🔍 Analyzing git diff..."));
-        console.log(chalk.gray(`Range: ${options.range}`));
+
+        // Resolve the git range - use provided range or detect baseline
+        const gitRange =
+          options.range || (await detectDefaultRange(options.repoPath));
+
+        console.log(chalk.gray(`Range: ${gitRange}`));
         console.log(chalk.gray(`Repository: ${options.repoPath}`));
 
-        // Initialize components
-        const aiProcessor = new AIProcessor(apiKey, options.verbose, {
-          model: process.env.POOLSIDE_AI_MODEL || "gpt-4o",
-        });
+        // Initialize AI processor with preset resolution
+        const aiProcessor = await AIProcessor.createWithPreset(
+          options.verbose,
+          {},
+          {
+            cliPreset: options.preset,
+            cliModel: options.model,
+          }
+        );
+
+        const resolvedModel = aiProcessor.getResolvedModel();
+        if (resolvedModel) {
+          console.log(chalk.gray(`AI Provider: ${resolvedModel.provider}`));
+          console.log(chalk.gray(`AI Model: ${resolvedModel.model}`));
+          if (options.verbose) {
+            console.log(chalk.gray(`Model Source: ${resolvedModel.source}`));
+          }
+        }
 
         const diffGenerator = new DiffGenerator({
           repoPath: options.repoPath,
           verbose: options.verbose,
         });
 
+        // Set repo URL for commit links if provided
+        if (options.repoUrl) {
+          diffGenerator.setRepoUrl(options.repoUrl);
+        }
+
         // Get diff data
-        const diffData = await diffGenerator.getDiff(options.range);
+        const diffData = await diffGenerator.getDiff(gitRange);
 
         if (diffData.files.length === 0) {
           console.log(
@@ -740,6 +852,9 @@ program
         }
         if (options.prUrl) {
           summary.prUrl = options.prUrl;
+        }
+        if (options.repoUrl) {
+          summary.repoUrl = options.repoUrl;
         }
 
         // Format output
@@ -911,10 +1026,20 @@ async function runSetupWizard(): Promise<void> {
     console.log(chalk.yellow("⚠️  No environment file found"));
   }
 
-  if (analysis.hasOpenAI) {
+  // Show AI provider status
+  if (analysis.hasOpenAI && analysis.hasAnthropic) {
+    console.log(
+      chalk.green("✅ Both OpenAI and Anthropic API keys configured")
+    );
+    console.log(chalk.gray(`   Active provider: ${analysis.provider}`));
+  } else if (analysis.hasOpenAI) {
     console.log(chalk.green("✅ OpenAI API key configured"));
+  } else if (analysis.hasAnthropic) {
+    console.log(chalk.green("✅ Anthropic API key configured"));
   } else {
-    console.log(chalk.red("❌ OpenAI API key not configured"));
+    console.log(
+      chalk.red("❌ No AI provider configured (OpenAI or Anthropic)")
+    );
   }
 
   if (analysis.hasJira) {
@@ -949,7 +1074,7 @@ async function runSetupWizard(): Promise<void> {
 
   // Determine setup needs and present options
   const isWellConfigured =
-    analysis.hasOpenAI && (analysis.hasJira || analysis.hasGitHub);
+    analysis.hasAI && (analysis.hasJira || analysis.hasGitHub);
 
   if (isWellConfigured && releaseConfigExists) {
     console.log(chalk.green("🎉 Your setup looks complete!"));
@@ -983,7 +1108,7 @@ async function runSetupWizard(): Promise<void> {
     choices.push({ name: "Set up environment configuration", value: "env" });
   }
 
-  if (analysis.hasJira && !analysis.hasOpenAI) {
+  if (analysis.hasJira && !analysis.hasAI) {
     choices.push({
       name: "Set up JIRA Personal Access Token (recommended)",
       value: "jira-pat",
@@ -1152,7 +1277,7 @@ async function setupEnvCommand(options: {
 
       // Determine setup status
       const isWellConfigured =
-        analysis.hasOpenAI && (analysis.hasJira || analysis.hasGitHub);
+        analysis.hasAI && (analysis.hasJira || analysis.hasGitHub);
 
       if (isWellConfigured) {
         console.log(chalk.green("\n🎉 Your configuration looks great!"));
@@ -1166,20 +1291,22 @@ async function setupEnvCommand(options: {
         return;
       }
 
-      if (analysis.hasJira && !analysis.hasOpenAI) {
+      if (analysis.hasJira && !analysis.hasAI) {
         console.log(
-          chalk.yellow("\n💡 JIRA is configured but missing OpenAI API key")
+          chalk.yellow(
+            "\n💡 JIRA is configured but missing AI provider API key"
+          )
         );
         console.log(
-          chalk.gray("   Add POOLSIDE_OPENAI_API_KEY to enable AI features")
+          chalk.gray(
+            "   Add POOLSIDE_OPENAI_API_KEY or POOLSIDE_ANTHROPIC_API_KEY to enable AI features"
+          )
         );
-      } else if (
-        analysis.hasOpenAI &&
-        !analysis.hasJira &&
-        !analysis.hasGitHub
-      ) {
+      } else if (analysis.hasAI && !analysis.hasJira && !analysis.hasGitHub) {
         console.log(
-          chalk.yellow("\n💡 OpenAI is configured but missing integrations")
+          chalk.yellow(
+            "\n💡 AI provider is configured but missing integrations"
+          )
         );
         console.log(
           chalk.gray("   Add JIRA or GitHub credentials to enable workflows")
@@ -1336,11 +1463,22 @@ async function setupReleaseCommand(options: { output: string }): Promise<void> {
 async function setupCheckCommand(): Promise<void> {
   console.log(chalk.blue("🔧 Checking configuration...\n"));
 
+  const provider = getAIProvider();
+  const hasOpenAI = !!process.env.POOLSIDE_OPENAI_API_KEY;
+  const hasAnthropic = !!process.env.POOLSIDE_ANTHROPIC_API_KEY;
+  const hasAI = hasOpenAI || hasAnthropic;
+
   const vars = [
+    { name: "AI Provider", key: "POOLSIDE_AI_PROVIDER", required: false },
     {
       name: "OpenAI API Key",
       key: "POOLSIDE_OPENAI_API_KEY",
-      required: true,
+      required: !hasAnthropic,
+    },
+    {
+      name: "Anthropic API Key",
+      key: "POOLSIDE_ANTHROPIC_API_KEY",
+      required: !hasOpenAI,
     },
     { name: "AI Model", key: "POOLSIDE_AI_MODEL", required: false },
     { name: "AI Max Tokens", key: "POOLSIDE_AI_MAX_TOKENS", required: false },
@@ -1361,6 +1499,7 @@ async function setupCheckCommand(): Promise<void> {
     console.log();
   });
 
+  console.log(chalk.gray(`Active AI Provider: ${provider}`));
   console.log(
     chalk.gray(
       "Note: Only the first 8 characters of tokens are shown for security."
@@ -1369,12 +1508,12 @@ async function setupCheckCommand(): Promise<void> {
   console.log(chalk.blue("\nWorkflow Requirements:"));
   console.log(
     chalk.gray(
-      "• Epic Automation: Requires OpenAI API Key, JIRA Host, JIRA Username, JIRA Password"
+      "• Epic Automation: Requires AI API Key (OpenAI or Anthropic), JIRA Host, JIRA Username, JIRA Password"
     )
   );
   console.log(
     chalk.gray(
-      "• Release Notes: Requires OpenAI API Key, GitHub Token (JIRA optional)"
+      "• Release Notes: Requires AI API Key (OpenAI or Anthropic), GitHub Token (JIRA optional)"
     )
   );
 }
@@ -1439,18 +1578,23 @@ async function parseEnvFile(
 // Helper function to check configuration completeness
 function analyzeConfiguration(envVars: Record<string, string | undefined>): {
   hasOpenAI: boolean;
+  hasAnthropic: boolean;
+  hasAI: boolean;
   hasJira: boolean;
   hasGitHub: boolean;
   missing: string[];
   configured: string[];
+  provider: AIProvider;
 } {
   const requiredVars = [
-    "POOLSIDE_OPENAI_API_KEY",
     "POOLSIDE_JIRA_HOST",
     "POOLSIDE_JIRA_USERNAME",
     "POOLSIDE_JIRA_PASSWORD",
   ];
   const optionalVars = [
+    "POOLSIDE_OPENAI_API_KEY",
+    "POOLSIDE_ANTHROPIC_API_KEY",
+    "POOLSIDE_AI_PROVIDER",
     "POOLSIDE_GITHUB_TOKEN",
     "POOLSIDE_AI_MODEL",
     "POOLSIDE_AI_MAX_TOKENS",
@@ -1458,7 +1602,21 @@ function analyzeConfiguration(envVars: Record<string, string | undefined>): {
 
   const hasOpenAI =
     !!envVars.POOLSIDE_OPENAI_API_KEY &&
-    envVars.POOLSIDE_OPENAI_API_KEY !== "your_openai_api_key_here";
+    envVars.POOLSIDE_OPENAI_API_KEY !== "your_openai_api_key_here" &&
+    !envVars.POOLSIDE_OPENAI_API_KEY?.startsWith("sk-your_");
+  const hasAnthropic =
+    !!envVars.POOLSIDE_ANTHROPIC_API_KEY &&
+    envVars.POOLSIDE_ANTHROPIC_API_KEY !== "your_anthropic_api_key_here" &&
+    !envVars.POOLSIDE_ANTHROPIC_API_KEY?.startsWith("sk-ant-your_");
+  const hasAI = hasOpenAI || hasAnthropic;
+
+  // Determine which provider is configured
+  const configuredProvider =
+    envVars.POOLSIDE_AI_PROVIDER?.toLowerCase() === "anthropic"
+      ? "anthropic"
+      : "openai";
+  const provider: AIProvider = configuredProvider;
+
   const hasJira =
     !!(
       envVars.POOLSIDE_JIRA_HOST &&
@@ -1475,6 +1633,7 @@ function analyzeConfiguration(envVars: Record<string, string | undefined>): {
   const missing: string[] = [];
   const configured: string[] = [];
 
+  // Check required JIRA vars
   requiredVars.forEach((key) => {
     if (envVars[key] && !envVars[key]?.startsWith("your_")) {
       configured.push(key);
@@ -1483,13 +1642,82 @@ function analyzeConfiguration(envVars: Record<string, string | undefined>): {
     }
   });
 
+  // At least one AI provider is required
+  if (!hasAI) {
+    missing.push("POOLSIDE_OPENAI_API_KEY or POOLSIDE_ANTHROPIC_API_KEY");
+  }
+
   optionalVars.forEach((key) => {
-    if (envVars[key] && !envVars[key]?.startsWith("your_")) {
+    if (
+      envVars[key] &&
+      !envVars[key]?.startsWith("your_") &&
+      !envVars[key]?.startsWith("sk-your_") &&
+      !envVars[key]?.startsWith("sk-ant-your_")
+    ) {
       configured.push(key);
     }
   });
 
-  return { hasOpenAI, hasJira, hasGitHub, missing, configured };
+  return {
+    hasOpenAI,
+    hasAnthropic,
+    hasAI,
+    hasJira,
+    hasGitHub,
+    missing,
+    configured,
+    provider,
+  };
+}
+
+// Helper function to detect the default git range for diff comparison
+async function detectDefaultRange(repoPath: string): Promise<string> {
+  const { execSync } = await import("node:child_process");
+
+  // List of potential baseline branches to check, in order of preference
+  const baselineCandidates = [
+    "main",
+    "master",
+    "origin/main",
+    "origin/master",
+    "develop",
+    "origin/develop",
+  ];
+
+  for (const branch of baselineCandidates) {
+    try {
+      // Check if the branch/ref exists
+      execSync(`git rev-parse --verify ${branch}`, {
+        cwd: repoPath,
+        stdio: "pipe",
+      });
+      return `${branch}...HEAD`;
+    } catch {
+      // Branch doesn't exist, try next
+    }
+  }
+
+  // Fallback: use the merge-base of HEAD with the first remote branch
+  try {
+    const defaultBranch = execSync(
+      "git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'",
+      { cwd: repoPath, stdio: "pipe", encoding: "utf8" }
+    ).trim();
+
+    if (defaultBranch) {
+      return `origin/${defaultBranch}...HEAD`;
+    }
+  } catch {
+    // Couldn't detect default branch
+  }
+
+  // Last resort: compare against the parent commit
+  console.log(
+    chalk.yellow(
+      "⚠️  Could not detect baseline branch. Using HEAD~1 as baseline."
+    )
+  );
+  return "HEAD~1...HEAD";
 }
 
 // Helper function to update .env file with missing variables
@@ -1522,6 +1750,279 @@ async function updateEnvFile(
   }
 
   await fs.writeFile(filePath, content);
+}
+
+// ===========================
+// Model Configuration Commands
+// ===========================
+const configProgram = program
+  .command("config")
+  .description("Manage AI model presets and configuration");
+
+// Main config command - show current config
+configProgram.action(async () => {
+  await configListCommand();
+});
+
+// config list - Show all presets and current selection
+configProgram
+  .command("list")
+  .description("Show all available presets and current selection")
+  .action(async () => {
+    await configListCommand();
+  });
+
+// config use <preset> - Switch active preset
+configProgram
+  .command("use <preset>")
+  .description("Switch active preset")
+  .action(async (preset: string) => {
+    await configUseCommand(preset);
+  });
+
+// config add <name> - Add custom preset (interactive)
+configProgram
+  .command("add <name>")
+  .description("Add a custom preset (interactive)")
+  .option("-p, --provider <provider>", "AI provider (openai or anthropic)")
+  .option("-m, --model <model>", "Model name")
+  .option("-d, --description <desc>", "Preset description")
+  .action(
+    async (
+      name: string,
+      options: { provider?: string; model?: string; description?: string }
+    ) => {
+      await configAddCommand(name, options);
+    }
+  );
+
+// config remove <name> - Remove custom preset
+configProgram
+  .command("remove <name>")
+  .description("Remove a custom preset")
+  .action(async (name: string) => {
+    await configRemoveCommand(name);
+  });
+
+// Config command implementations
+async function configListCommand(): Promise<void> {
+  const configManager = new ConfigManager();
+  const config = await configManager.readConfig();
+  const allPresets = configManager.getAllPresets(config);
+  const resolved = await configManager.resolveModel();
+
+  console.log(chalk.blue("\n🎛️  AI Model Configuration"));
+  console.log(chalk.gray("═══════════════════════════════════\n"));
+
+  // Show current active model
+  console.log(chalk.white("Current Model:"));
+  console.log(chalk.green(`  Provider: ${resolved.provider}`));
+  console.log(chalk.green(`  Model: ${resolved.model}`));
+  console.log(chalk.gray(`  Source: ${resolved.source}`));
+  console.log();
+
+  // Show built-in presets
+  console.log(chalk.white("Built-in Presets:"));
+  for (const [name, preset] of Object.entries(BUILT_IN_PRESETS)) {
+    const isActive = config.activePreset === name;
+    const marker = isActive ? chalk.green("●") : chalk.gray("○");
+    const nameStr = isActive ? chalk.green(name) : chalk.white(name);
+    console.log(
+      `  ${marker} ${nameStr.padEnd(12)} ${chalk.cyan(preset.provider)}:${
+        preset.model
+      }`
+    );
+    if (preset.description) {
+      console.log(chalk.gray(`                   ${preset.description}`));
+    }
+  }
+  console.log();
+
+  // Show custom presets
+  const customPresets = Object.entries(config.presets || {});
+  if (customPresets.length > 0) {
+    console.log(chalk.white("Custom Presets:"));
+    for (const [name, preset] of customPresets) {
+      const isActive = config.activePreset === name;
+      const marker = isActive ? chalk.green("●") : chalk.gray("○");
+      const nameStr = isActive ? chalk.green(name) : chalk.white(name);
+      console.log(
+        `  ${marker} ${nameStr.padEnd(12)} ${chalk.cyan(preset.provider)}:${
+          preset.model
+        }`
+      );
+      if (preset.description) {
+        console.log(chalk.gray(`                   ${preset.description}`));
+      }
+    }
+    console.log();
+  }
+
+  // Show API key status
+  console.log(chalk.white("API Key Status:"));
+  const hasOpenAI = configManager.hasApiKeyForProvider("openai");
+  const hasAnthropic = configManager.hasApiKeyForProvider("anthropic");
+  console.log(
+    `  ${
+      hasOpenAI ? chalk.green("✅") : chalk.red("❌")
+    } OpenAI (POOLSIDE_OPENAI_API_KEY)`
+  );
+  console.log(
+    `  ${
+      hasAnthropic ? chalk.green("✅") : chalk.red("❌")
+    } Anthropic (POOLSIDE_ANTHROPIC_API_KEY)`
+  );
+  console.log();
+
+  // Show config file location
+  console.log(chalk.gray(`Config file: ${configManager.getConfigPath()}`));
+  console.log();
+
+  // Show usage hints
+  console.log(chalk.white("Usage:"));
+  console.log(
+    chalk.gray("  poolside config use <preset>    Switch active preset")
+  );
+  console.log(
+    chalk.gray("  poolside config add <name>      Add custom preset")
+  );
+  console.log(
+    chalk.gray("  poolside config remove <name>   Remove custom preset")
+  );
+  console.log(
+    chalk.gray("  poolside diff --preset fast   One-time preset override")
+  );
+  console.log(
+    chalk.gray(
+      "  poolside diff --model anthropic:claude-3-haiku-20240307   Direct model"
+    )
+  );
+}
+
+async function configUseCommand(presetName: string): Promise<void> {
+  const configManager = new ConfigManager();
+
+  try {
+    await configManager.setActivePreset(presetName);
+    const preset = configManager.getPreset(presetName);
+
+    console.log(chalk.green(`\n✅ Switched to preset: ${presetName}`));
+    if (preset) {
+      console.log(chalk.gray(`   Provider: ${preset.provider}`));
+      console.log(chalk.gray(`   Model: ${preset.model}`));
+      if (preset.description) {
+        console.log(chalk.gray(`   ${preset.description}`));
+      }
+    }
+    console.log();
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(chalk.red(`\n❌ ${errorMessage}`));
+    process.exit(1);
+  }
+}
+
+async function configAddCommand(
+  name: string,
+  options: { provider?: string; model?: string; description?: string }
+): Promise<void> {
+  const configManager = new ConfigManager();
+
+  // Check if preset name already exists
+  if (configManager.presetExists(name)) {
+    if (BUILT_IN_PRESETS[name]) {
+      console.error(
+        chalk.red(`\n❌ Cannot overwrite built-in preset "${name}"`)
+      );
+    } else {
+      console.error(
+        chalk.red(`\n❌ Preset "${name}" already exists. Remove it first.`)
+      );
+    }
+    process.exit(1);
+  }
+
+  let provider: AIProvider;
+  let model: string;
+  let description: string | undefined = options.description;
+
+  // If options provided, use them directly
+  if (options.provider && options.model) {
+    if (options.provider !== "openai" && options.provider !== "anthropic") {
+      console.error(chalk.red('\n❌ Provider must be "openai" or "anthropic"'));
+      process.exit(1);
+    }
+    provider = options.provider as AIProvider;
+    model = options.model;
+  } else {
+    // Interactive mode
+    const answers = await inquirer.prompt([
+      {
+        type: "list",
+        name: "provider",
+        message: "Select AI provider:",
+        choices: [
+          { name: "OpenAI", value: "openai" },
+          { name: "Anthropic", value: "anthropic" },
+        ],
+        default: options.provider || "openai",
+      },
+      {
+        type: "input",
+        name: "model",
+        message: "Enter model name:",
+        default: options.model,
+        validate: (input: string) =>
+          input.trim().length > 0 || "Model name is required",
+      },
+      {
+        type: "input",
+        name: "description",
+        message: "Enter description (optional):",
+        default: options.description || "",
+      },
+    ]);
+
+    provider = answers.provider;
+    model = answers.model;
+    description = answers.description || undefined;
+  }
+
+  const preset: ModelPreset = {
+    name,
+    provider,
+    model,
+    description,
+  };
+
+  try {
+    await configManager.addPreset(preset);
+    console.log(chalk.green(`\n✅ Added custom preset: ${name}`));
+    console.log(chalk.gray(`   Provider: ${provider}`));
+    console.log(chalk.gray(`   Model: ${model}`));
+    if (description) {
+      console.log(chalk.gray(`   ${description}`));
+    }
+    console.log();
+    console.log(chalk.gray(`Use it with: poolside config use ${name}`));
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(chalk.red(`\n❌ ${errorMessage}`));
+    process.exit(1);
+  }
+}
+
+async function configRemoveCommand(name: string): Promise<void> {
+  const configManager = new ConfigManager();
+
+  try {
+    await configManager.removePreset(name);
+    console.log(chalk.green(`\n✅ Removed custom preset: ${name}`));
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(chalk.red(`\n❌ ${errorMessage}`));
+    process.exit(1);
+  }
 }
 
 program.parse();
