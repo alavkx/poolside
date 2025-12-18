@@ -734,9 +734,10 @@ program
     }
   );
 
-// Diff Command - Analyze git diff and generate customer-focused summary
+// Changelog Command - Analyze git diff and generate customer-focused summary
 program
-  .command("diff")
+  .command("changelog")
+  .alias("diff")
   .description(
     "Analyze a git diff and generate a customer-focused summary of changes"
   )

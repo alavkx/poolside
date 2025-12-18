@@ -1,4 +1,4 @@
-name: What's the Diff
+name: Changelog
 
 # This workflow analyzes PRs and posts customer-focused change summaries to Slack.
 # Copy this workflow to your repository and configure the required secrets.
@@ -9,7 +9,7 @@ on:
 
 # Prevent multiple runs on the same PR
 concurrency:
-  group: whats-the-diff-${{ github.event.pull_request.number }}
+  group: changelog-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -33,7 +33,7 @@ jobs:
 
       - name: Analyze PR diff
         run: |
-          npx poolside@latest whats-the-diff \
+          npx poolside@latest changelog \
             --range "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" \
             --format text \
             --pr-number "${{ github.event.pull_request.number }}" \
@@ -46,7 +46,7 @@ jobs:
       - name: Post to Slack
         if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         run: |
-          npx poolside@latest whats-the-diff \
+          npx poolside@latest changelog \
             --range "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" \
             --format slack \
             --slack-webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \

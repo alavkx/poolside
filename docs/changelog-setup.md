@@ -1,10 +1,10 @@
-# What's the Diff - Installation Guide
+# Changelog - Installation Guide
 
 Automatically analyze PRs and post customer-focused change summaries to Slack using AI.
 
 ## Overview
 
-"What's the Diff" is a GitHub Actions workflow that:
+"Changelog" is a GitHub Actions workflow that:
 
 - Triggers on every PR (opened, updated, or marked ready for review)
 - Uses AI to analyze code changes
@@ -15,17 +15,17 @@ Automatically analyze PRs and post customer-focused change summaries to Slack us
 
 ### Step 1: Copy the Workflow File
 
-Create `.github/workflows/whats-the-diff.yml` in your repository:
+Create `.github/workflows/changelog.yml` in your repository:
 
 ```yaml
-name: What's the Diff
+name: Changelog
 
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review]
 
 concurrency:
-  group: whats-the-diff-${{ github.event.pull_request.number }}
+  group: changelog-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -47,7 +47,7 @@ jobs:
 
       - name: Analyze PR diff
         run: |
-          npx poolside@latest whats-the-diff \
+          npx poolside@latest changelog \
             --range "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" \
             --format text \
             --pr-number "${{ github.event.pull_request.number }}" \
@@ -60,7 +60,7 @@ jobs:
       - name: Post to Slack
         if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         run: |
-          npx poolside@latest whats-the-diff \
+          npx poolside@latest changelog \
             --range "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" \
             --format slack \
             --slack-webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
@@ -96,7 +96,7 @@ To post summaries to Slack:
 
    - Go to [Slack API Apps](https://api.slack.com/apps)
    - Click **Create New App** → **From scratch**
-   - Name it (e.g., "PR Diff Bot") and select your workspace
+   - Name it (e.g., "Changelog Bot") and select your workspace
 
 2. **Enable Incoming Webhooks:**
 
