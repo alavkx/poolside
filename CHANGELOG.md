@@ -1,5 +1,36 @@
 # poolside
 
+## 0.5.0
+
+### Minor Changes
+
+- Multi-provider AI support, model presets, diff generator, and Slack integration
+
+  **New Features:**
+
+  - Multi-provider support: Choose between OpenAI and Anthropic AI providers
+  - Model presets: Built-in presets (fast, quality, balanced, cheap) for quick model switching
+  - Custom presets: Create and manage your own presets via `poolside config add`
+  - **Diff generator**: New `poolside diff` command to analyze code changes between commits/branches
+  - **Slack integration**: Post diff summaries and notifications directly to Slack channels
+  - Configuration management: Persistent config stored in `~/.poolside/config.json`
+  - CLI config commands: `poolside config list/use/add/remove`
+  - Flexible model resolution: CLI flags > env vars > config file > defaults
+
+  **Configuration Changes:**
+
+  - New `POOLSIDE_AI_PROVIDER` environment variable to select AI provider
+  - New `POOLSIDE_ANTHROPIC_API_KEY` for Anthropic/Claude support
+  - New `POOLSIDE_PRESET` environment variable for default preset
+
+  **Technical:**
+
+  - New `@ai-sdk/anthropic` dependency for Claude models
+  - New `model-config.ts` module with `ConfigManager` class
+  - New `diff-generator.ts` for code diff analysis
+  - New `slack-client.ts` for Slack API integration
+  - Updated AI processor with `createWithPreset()` factory method
+
 ## 0.4.0
 
 ### Minor Changes
