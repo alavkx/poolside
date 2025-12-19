@@ -243,7 +243,8 @@ export class ConfigManager {
    * 3. POOLSIDE_AI_MODEL + POOLSIDE_AI_PROVIDER env vars
    * 4. POOLSIDE_PRESET env var
    * 5. activePreset in config file
-   * 6. balanced preset (default)
+   * 6. Auto-detect based on available API keys
+   * 7. balanced preset (default)
    */
   async resolveModel(
     options: ModelResolutionOptions = {}
@@ -319,7 +320,21 @@ export class ConfigManager {
       }
     }
 
-    // 6. Default to balanced preset
+    // 6. Auto-detect based on available API keys
+    const hasOpenAI = this.hasApiKeyForProvider("openai");
+    const hasAnthropic = this.hasApiKeyForProvider("anthropic");
+
+    if (hasAnthropic && !hasOpenAI) {
+      // Only Anthropic key available - use quality preset
+      const anthropicPreset = BUILT_IN_PRESETS.quality;
+      return {
+        provider: anthropicPreset.provider,
+        model: anthropicPreset.model,
+        source: "default",
+      };
+    }
+
+    // 7. Default to balanced preset (OpenAI)
     const defaultPreset = BUILT_IN_PRESETS[DEFAULT_PRESET];
     return {
       provider: defaultPreset.provider,
