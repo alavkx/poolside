@@ -1,5 +1,27 @@
 # poolside
 
+## 0.7.0
+
+### Minor Changes
+
+- Smart model auto-detection based on available API keys
+
+  **New Features:**
+
+  - Auto-detect which AI provider to use when no explicit model/preset is configured
+  - Only Anthropic key available → automatically uses Claude (quality preset)
+  - Only OpenAI key available → uses GPT-4o (balanced preset)
+  - Both keys available → defaults to balanced preset (existing behavior)
+
+  **Improvements:**
+
+  - Prevents confusing "POOLSIDE_OPENAI_API_KEY required" errors when only Anthropic is configured
+  - Better out-of-box experience for users with a single provider
+
+  **Technical:**
+
+  - Added comprehensive test suite for model resolution logic
+
 ## 0.6.0
 
 ### Minor Changes
