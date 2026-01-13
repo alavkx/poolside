@@ -58,6 +58,7 @@ export class AIProcessor {
     resolvedModel?: ResolvedModel;
   };
   public model: Parameters<typeof generateText>[0]["model"];
+  private readonly requestTimeoutMs: number;
 
   /**
    * Create an AIProcessor with model preset resolution
@@ -132,6 +133,10 @@ export class AIProcessor {
       resolvedModel: aiConfig.resolvedModel,
     };
 
+    this.requestTimeoutMs = AIProcessor.parseTimeoutMsFromEnv(
+      process.env.POOLSIDE_AI_REQUEST_TIMEOUT_MS
+    );
+
     // Initialize the appropriate model based on provider
     this.model =
       provider === "anthropic"
@@ -172,7 +177,25 @@ export class AIProcessor {
       console.log(
         chalk.gray(`🔧 [VERBOSE] API Key: ${apiKey.substring(0, 8)}...`)
       );
+      console.log(
+        chalk.gray(
+          `🔧 [VERBOSE] Request Timeout: ${this.requestTimeoutMs}ms (POOLSIDE_AI_REQUEST_TIMEOUT_MS)`
+        )
+      );
     }
+  }
+
+  private static parseTimeoutMsFromEnv(value: string | undefined): number {
+    const fallback = 120_000;
+    if (!value) return fallback;
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+
+    // Avoid accidental "1" / "5" (seconds) causing constant failures
+    if (parsed < 1_000) return fallback;
+
+    return Math.floor(parsed);
   }
 
   /**
@@ -565,6 +588,10 @@ export class AIProcessor {
     }
 
     const startTime = Date.now();
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, this.requestTimeoutMs);
 
     try {
       const { text, usage, warnings } = await generateText({
@@ -572,6 +599,7 @@ export class AIProcessor {
         prompt,
         temperature: 0.3,
         maxTokens: this.config.maxTokens,
+        abortSignal: abortController.signal,
       });
 
       const duration = Date.now() - startTime;
@@ -639,6 +667,13 @@ export class AIProcessor {
         console.log(chalk.red(`  Duration before error: ${duration}ms`));
         console.log(chalk.red(`  Error type: ${error.constructor.name}`));
         console.log(chalk.red(`  Error message: ${error.message}`));
+        if (error?.name === "AbortError") {
+          console.log(
+            chalk.red(
+              `  Aborted due to timeout after ${this.requestTimeoutMs}ms (POOLSIDE_AI_REQUEST_TIMEOUT_MS)`
+            )
+          );
+        }
 
         if (error.code) {
           console.log(chalk.red(`  Error code: ${error.code}`));
@@ -690,6 +725,8 @@ export class AIProcessor {
       }
 
       throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -877,6 +914,10 @@ Release note entries:`;
     }
 
     const startTime = Date.now();
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, this.requestTimeoutMs);
 
     try {
       const { text, usage } = await generateText({
@@ -884,6 +925,7 @@ Release note entries:`;
         prompt,
         temperature: 0.05, // Very low temperature for maximum factual accuracy
         maxTokens: this.config.editorMaxTokens,
+        abortSignal: abortController.signal,
       });
 
       const duration = Date.now() - startTime;
@@ -922,9 +964,18 @@ Release note entries:`;
         console.log(
           chalk.red(`🔧 [VERBOSE] Editor refinement error: ${error.message}`)
         );
+        if (error?.name === "AbortError") {
+          console.log(
+            chalk.red(
+              `🔧 [VERBOSE] Editor refinement aborted due to timeout after ${this.requestTimeoutMs}ms (POOLSIDE_AI_REQUEST_TIMEOUT_MS)`
+            )
+          );
+        }
       }
       // Return original entries if editor fails
       return entries;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

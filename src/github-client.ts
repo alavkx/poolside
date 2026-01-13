@@ -56,19 +56,63 @@ export class GitHubClient {
         }
       }
 
-      // Get all PRs merged in the specified month
-      const { data: prs } = await this.octokit.rest.pulls.list({
-        owner,
-        repo,
-        state: "closed",
-        base: baseBranch,
-        sort: "updated",
-        direction: "desc",
-        per_page: 100,
-      });
+      // Paginate through all closed PRs to find those merged in the target month
+      // We use the search API which allows date-based filtering
+      const endDay = endDate.getDate().toString().padStart(2, "0");
+      const searchQuery = `repo:${owner}/${repo} is:pr is:merged base:${baseBranch} merged:${month}-01..${month}-${endDay}`;
+      
+      spinner.text = `Searching for PRs merged in ${month}...`;
+      
+      const allPRs: Array<{
+        number: number;
+        title: string;
+        body: string | null;
+        html_url: string;
+        user: { login: string } | null;
+        merged_at: string | null;
+        labels: Array<{ name: string }>;
+      }> = [];
 
-      // Filter PRs that were merged in the target month
-      const filteredPRs = prs.filter((pr) => {
+      // Use search API with pagination
+      let page = 1;
+      const perPage = 100;
+      
+      while (true) {
+        const { data: searchResults } = await this.octokit.rest.search.issuesAndPullRequests({
+          q: searchQuery,
+          sort: "updated",
+          order: "desc",
+          per_page: perPage,
+          page,
+        });
+
+        if (searchResults.items.length === 0) break;
+
+        // Search API returns issues format, need to filter and cast
+        for (const item of searchResults.items) {
+          if (item.pull_request) {
+            allPRs.push({
+              number: item.number,
+              title: item.title,
+              body: item.body ?? null,
+              html_url: item.html_url,
+              user: item.user,
+              merged_at: item.pull_request.merged_at ?? null,
+              labels: item.labels.map((l) => ({ name: typeof l === "string" ? l : l.name || "" })),
+            });
+          }
+        }
+
+        // Check if we've fetched all results
+        if (searchResults.items.length < perPage || allPRs.length >= searchResults.total_count) {
+          break;
+        }
+
+        page++;
+      }
+
+      // Filter PRs that were actually merged in the target month (double-check)
+      const filteredPRs = allPRs.filter((pr) => {
         if (!pr.merged_at) return false;
         const mergedDate = parseISO(pr.merged_at);
         return mergedDate >= startDate && mergedDate <= endDate;

@@ -4,8 +4,42 @@ import { http, HttpResponse } from "msw";
 
 // Basic handlers for external APIs
 const handlers = [
-  // GitHub API - list PRs
-  http.get("https://api.github.com/repos/*/pulls", () => {
+  // GitHub API - get repository info (for default branch detection)
+  http.get("https://api.github.com/repos/:owner/:repo", ({ params }) => {
+    // Avoid matching pulls endpoint
+    if (params.repo === "pulls") return;
+    return HttpResponse.json({
+      default_branch: "main",
+      name: params.repo,
+      owner: { login: params.owner },
+    });
+  }),
+
+  // GitHub API - search issues/PRs (used for fetching merged PRs by date)
+  http.get("https://api.github.com/search/issues", () => {
+    return HttpResponse.json({
+      total_count: 1,
+      incomplete_results: false,
+      items: [
+        {
+          number: 1,
+          title: "Add user authentication",
+          body: "Implements PROJ-123 user auth system",
+          user: { login: "developer" },
+          labels: [{ name: "feature" }],
+          html_url: "https://github.com/test/repo/pull/1",
+          state: "closed",
+          pull_request: {
+            url: "https://api.github.com/repos/test/repo/pulls/1",
+            merged_at: "2024-01-15T10:00:00Z",
+          },
+        },
+      ],
+    });
+  }),
+
+  // GitHub API - list PRs (legacy, kept for compatibility)
+  http.get("https://api.github.com/repos/:owner/:repo/pulls", () => {
     return HttpResponse.json([
       {
         number: 1,
@@ -21,7 +55,7 @@ const handlers = [
   }),
 
   // GitHub API - get specific PR
-  http.get("https://api.github.com/repos/*/pulls/:number", () => {
+  http.get("https://api.github.com/repos/:owner/:repo/pulls/:number", () => {
     return HttpResponse.json({
       number: 1,
       title: "Add user authentication",
