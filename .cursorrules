@@ -103,7 +103,53 @@ This will:
 - Uses `.env` file for configuration
 - Key variables: `POOLSIDE_OPENAI_API_KEY`, `POOLSIDE_JIRA_*`, `POOLSIDE_GITHUB_TOKEN`
 - Setup wizard: `poolside setup`
-- Test connections: `poolside setup test`
+- Test connections: `poolside config test`
+- Show configuration: `poolside config`
+
+## CLI Command Structure
+
+### Setup Commands (Onboarding & Scaffolding)
+```bash
+poolside setup              # Interactive wizard
+poolside setup changelog    # Add GitHub Actions changelog workflow
+poolside setup release      # Initialize release-config.json
+poolside setup jira-pat     # Set up JIRA Personal Access Token
+```
+
+### Config Commands (Configuration Management)
+```bash
+poolside config             # Display all credentials and presets
+poolside config show        # Same as 'config' (alias)
+poolside config set <key> <value>  # Set a credential
+poolside config get <key>   # Get a credential value
+poolside config unset <key> # Remove a credential
+poolside config test        # Test connections to all services
+poolside config preset list         # List AI presets
+poolside config preset use <name>   # Switch active preset
+poolside config preset add <name>   # Add custom preset
+poolside config preset remove <name> # Remove custom preset
+```
+
+### Workflow Commands
+```bash
+poolside process-epic <epic-id>   # Process JIRA epic
+poolside process-issue <issue-id> # Process single JIRA issue
+poolside list-epics <project-key> # List epics for project
+poolside epic-status <epic-id>    # Get epic status
+poolside cursor-prompt <epic-id>  # Generate Cursor prompt template
+```
+
+### Release Notes Commands
+```bash
+poolside generate-release-notes -c <config>  # Multi-repo release notes
+poolside generate-single-repo -r <repo>      # Single repo (legacy)
+```
+
+### Changelog/Diff Commands
+```bash
+poolside changelog [options]  # Analyze git diff and generate summary
+poolside diff [options]       # Alias for changelog
+```
 
 ## Common Commands
 

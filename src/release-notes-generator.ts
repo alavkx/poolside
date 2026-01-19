@@ -7,7 +7,7 @@ import {
   type ReleaseNotesData,
 } from "./ai-processor.js";
 import { MarkdownGenerator } from "./markdown-generator.js";
-import { type ModelResolutionOptions } from "./model-config.js";
+import { ConfigManager, type ModelResolutionOptions } from "./model-config.js";
 import chalk from "chalk";
 import ora from "ora";
 
@@ -101,7 +101,9 @@ export async function generateMultiRepoReleaseNotes(
 
   try {
     // Initialize clients
-    const githubClient = new GitHubClient(process.env.POOLSIDE_GITHUB_TOKEN!);
+    const configManager = new ConfigManager();
+    const githubToken = await configManager.getCredential("githubToken") as string | undefined;
+    const githubClient = new GitHubClient(githubToken!);
     const jiraClient = await createJiraClient(jiraConfig, verbose);
 
     // Create AI processor with preset resolution
@@ -521,9 +523,10 @@ async function createJiraClient(
     return null;
   }
 
-  const jiraHost = jiraConfig.baseUrl || process.env.POOLSIDE_JIRA_HOST;
-  const jiraUsername = process.env.POOLSIDE_JIRA_USERNAME;
-  const jiraPassword = process.env.POOLSIDE_JIRA_PASSWORD;
+  const configManager = new ConfigManager();
+  const jiraHost = jiraConfig.baseUrl || await configManager.getCredential("jiraHost") as string | undefined;
+  const jiraUsername = await configManager.getCredential("jiraUsername") as string | undefined;
+  const jiraPassword = await configManager.getCredential("jiraPassword") as string | undefined;
 
   if (!jiraHost || !jiraUsername || !jiraPassword) {
     console.log(

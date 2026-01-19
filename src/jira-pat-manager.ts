@@ -2,6 +2,7 @@ import axios from 'axios';
 import ora from 'ora';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
+import { ConfigManager } from './model-config.js';
 
 export interface JiraPATConfig {
   host: string;
@@ -201,20 +202,20 @@ export class JiraPATManager {
 
       console.log(chalk.blue('\n📝 Next steps:'));
       console.log(chalk.gray('1. Copy the token above'));
-      console.log(chalk.gray('2. Update your .env file: JIRA_PASSWORD=' + patResult.token));
-      console.log(chalk.gray('3. Remove your old password from the .env file'));
+      console.log(chalk.gray('2. Run: poolside config set jiraPassword ' + patResult.token));
+      console.log(chalk.gray('3. Or let us save it automatically'));
 
-      const { updateEnv } = await inquirer.prompt([
+      const { updateConfig } = await inquirer.prompt([
         {
           type: 'confirm',
-          name: 'updateEnv',
-          message: 'Would you like to automatically update your .env file?',
+          name: 'updateConfig',
+          message: 'Would you like to automatically save the PAT to ~/.poolside/config.json?',
           default: true,
         },
       ]);
 
-      if (updateEnv) {
-        await this.updateEnvFile(patResult.token);
+      if (updateConfig) {
+        await this.savePatToConfig(patResult.token);
       }
 
       return patResult;
@@ -235,32 +236,15 @@ export class JiraPATManager {
     }
   }
 
-  // Update .env file with new PAT
-  async updateEnvFile(newToken: string): Promise<void> {
+  async savePatToConfig(newToken: string): Promise<void> {
     try {
-      const fs = await import('fs/promises');
-      const path = '.env';
-
-      let envContent = '';
-      try {
-        envContent = await fs.readFile(path, 'utf8');
-      } catch (error) {
-        // .env doesn't exist, create it
-        envContent = '';
-      }
-
-      // Replace or add JIRA_PASSWORD
-      if (envContent.includes('JIRA_PASSWORD=')) {
-        envContent = envContent.replace(/JIRA_PASSWORD=.*$/m, `JIRA_PASSWORD=${newToken}`);
-      } else {
-        envContent += `\nJIRA_PASSWORD=${newToken}`;
-      }
-
-      await fs.writeFile(path, envContent);
-      console.log(chalk.green('✅ .env file updated with new Personal Access Token'));
-    } catch (error: any) {
-      console.log(chalk.yellow('⚠️  Could not automatically update .env file:'), error.message);
-      console.log(chalk.gray('Please manually update JIRA_PASSWORD in your .env file'));
+      const configManager = new ConfigManager();
+      await configManager.setCredential('jiraPassword', newToken);
+      console.log(chalk.green('✅ Personal Access Token saved to ~/.poolside/config.json'));
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log(chalk.yellow('⚠️  Could not automatically save PAT:'), errorMessage);
+      console.log(chalk.gray('Please run: poolside config set jiraPassword <your-token>'));
     }
   }
 

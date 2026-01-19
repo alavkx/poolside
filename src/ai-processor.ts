@@ -119,7 +119,7 @@ export class AIProcessor {
 
     // Set default model based on provider
     const defaultModel =
-      provider === "anthropic" ? "claude-sonnet-4-20250514" : "gpt-4o";
+      provider === "anthropic" ? "claude-sonnet-4-20250514" : "gpt-5.2";
 
     // Apply AI configuration with defaults
     this.config = {
@@ -133,8 +133,10 @@ export class AIProcessor {
       resolvedModel: aiConfig.resolvedModel,
     };
 
+    const timeoutEnv = process.env.POOLSIDE_AI_REQUEST_TIMEOUT_MS;
+    const configTimeout = new ConfigManager().readConfigSync().credentials?.aiRequestTimeoutMs;
     this.requestTimeoutMs = AIProcessor.parseTimeoutMsFromEnv(
-      process.env.POOLSIDE_AI_REQUEST_TIMEOUT_MS
+      timeoutEnv || (configTimeout !== undefined ? String(configTimeout) : undefined)
     );
 
     // Initialize the appropriate model based on provider

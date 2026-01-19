@@ -185,34 +185,26 @@ export class EpicWorkflow {
 
   async validateConnections(): Promise<void> {
     const spinner = ora("Validating connections...").start();
+    spinner.stop();
 
-    try {
-      const connections = await this.utils.validateConnections();
+    const connections = await this.utils.validateConnections();
 
-      if (!connections.jira) {
-        throw new Error(
-          "JIRA connection failed. Check your JIRA configuration."
-        );
-      }
+    const failures: string[] = [];
 
-      if (!connections.ai) {
-        throw new Error(
-          "AI processor not available. Check your OpenAI configuration."
-        );
-      }
+    if (!connections.jira) {
+      failures.push("JIRA connection failed. Check your JIRA configuration.");
+    }
 
-      spinner.succeed("All connections validated");
+    if (!connections.ai) {
+      failures.push("AI processor not available. Check your OpenAI configuration.");
+    }
 
-      if (this.verbose) {
-        console.log(chalk.gray(`  • JIRA: ${connections.jira ? "✅" : "❌"}`));
-        console.log(
-          chalk.gray(`  • GitHub: ${connections.github ? "✅" : "❌"}`)
-        );
-        console.log(chalk.gray(`  • AI: ${connections.ai ? "✅" : "❌"}`));
-      }
-    } catch (error: any) {
-      spinner.fail("Connection validation failed");
-      throw error;
+    console.log(chalk.gray(`  • JIRA: ${connections.jira ? "✅" : "❌"}`));
+    console.log(chalk.gray(`  • GitHub: ${connections.github ? "✅" : "❌"}`));
+    console.log(chalk.gray(`  • AI: ${connections.ai ? "✅" : "❌"}`));
+
+    if (failures.length > 0) {
+      throw new Error(failures.join("\n"));
     }
   }
 

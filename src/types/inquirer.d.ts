@@ -17,6 +17,8 @@ declare module "inquirer" {
 
   interface PasswordQuestion extends QuestionBase {
     type: "password";
+    // biome-ignore lint/suspicious/noExplicitAny: External library type definition
+    validate?: (input: any) => boolean | string | Promise<boolean | string>;
   }
 
   interface ConfirmQuestion extends QuestionBase {

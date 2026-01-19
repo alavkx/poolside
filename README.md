@@ -30,39 +30,59 @@ npx poolside@latest --help
    poolside setup
    ```
 
-   Or manually initialize environment configuration:
+   This will prompt you for your credentials and store them in `~/.poolside/config.json`.
+
+2. **Or set credentials directly:**
 
    ```bash
-   poolside setup env
-   ```
-
-2. **Edit the `.env` file** with your credentials:
-
-   ```bash
-   # OpenAI Configuration (Required)
-   POOLSIDE_OPENAI_API_KEY=your_openai_api_key_here
-   POOLSIDE_AI_MODEL=gpt-4o
-   POOLSIDE_AI_MAX_TOKENS=4000
-
-   # JIRA Configuration (Required for epic automation)
-   POOLSIDE_JIRA_HOST=your-company.atlassian.net
-   POOLSIDE_JIRA_USERNAME=your_jira_username
-   POOLSIDE_JIRA_PASSWORD=your_jira_password_or_pat
-
-   # GitHub Configuration (Required for release notes)
-   POOLSIDE_GITHUB_TOKEN=your_github_token_here
+   poolside config set openaiApiKey sk-your-api-key
+   poolside config set jiraHost your-company.atlassian.net
+   poolside config set jiraUsername your_username
+   poolside config set jiraPassword your_password_or_pat
+   poolside config set githubToken ghp_your_github_token
    ```
 
 3. **Test your connections:**
 
    ```bash
-   poolside setup test
+   poolside config test
    ```
 
 4. **Process an epic:**
    ```bash
    poolside process-epic PROJ-123
    ```
+
+## Configuration
+
+Poolside uses a unified configuration system with the following resolution order:
+
+1. **Environment variables** (`POOLSIDE_*`) - Highest priority, for CI/CD
+2. **Config file** (`~/.poolside/config.json`) - Primary user config
+3. **Default values** - Fallback defaults
+
+### Managing Credentials
+
+```bash
+poolside setup              # Interactive setup wizard
+poolside config             # View all stored credentials and presets
+poolside config show        # Same as 'config' (alias)
+poolside config set <k> <v> # Set a credential
+poolside config get <key>   # Get a credential value
+poolside config test        # Test all connections
+```
+
+### Environment Variables (for CI/CD)
+
+If you need to use environment variables (e.g., in CI/CD pipelines), set these:
+
+```bash
+export POOLSIDE_OPENAI_API_KEY=sk-your-api-key
+export POOLSIDE_JIRA_HOST=your-company.atlassian.net
+export POOLSIDE_JIRA_USERNAME=your_username
+export POOLSIDE_JIRA_PASSWORD=your_password_or_pat
+export POOLSIDE_GITHUB_TOKEN=ghp_your_github_token
+```
 
 ## Core Workflow
 
@@ -210,23 +230,10 @@ poolside setup
 
 This command provides a guided setup experience that:
 
-- Analyzes your current configuration
-- Helps you set up missing credentials
+- Analyzes your current configuration in `~/.poolside/config.json`
+- Prompts for missing credentials
+- Stores credentials securely in the config file
 - Tests connections to verify setup
-- Provides specific guidance for common issues
-
-#### `setup env`
-
-Initialize environment configuration file.
-
-```bash
-poolside setup env
-```
-
-**Options:**
-
-- `-o, --output <file>`: Output env file path (default: ".env")
-- `--force`: Force overwrite existing file
 
 #### `setup jira-pat`
 
@@ -252,50 +259,92 @@ poolside setup release
 
 - `-o, --output <file>`: Output config file path (default: "release-config.json")
 
-#### `setup check`
+#### `setup changelog`
 
-Check current environment configuration.
+Add GitHub Actions workflow for AI-powered PR changelog summaries.
 
 ```bash
-poolside setup check
+poolside setup changelog
 ```
 
-#### `setup test`
+**Options:**
 
-Test connections to JIRA, GitHub, and OpenAI.
+- `--no-slack`: Skip Slack integration setup
+- `--force`: Overwrite existing workflow file
+- `--dry-run`: Preview what would be created without writing files
+
+### Configuration Management
+
+#### `config` / `config show`
+
+Display all credentials and AI presets.
 
 ```bash
-poolside setup test --verbose
+poolside config
+poolside config show  # Same as above
+```
+
+#### `config test`
+
+Test connections to JIRA, GitHub, and AI providers.
+
+```bash
+poolside config test --verbose
 ```
 
 **Options:**
 
 - `--verbose`: Enable verbose logging for debugging
 
-#### `setup validate`
+#### `config preset list`
 
-Check configuration and test all connections.
+List all available AI presets.
 
 ```bash
-poolside setup validate --verbose
+poolside config preset list
 ```
 
-**Options:**
+#### `config preset use <name>`
 
-- `--verbose`: Enable verbose logging for debugging
+Switch the active AI preset.
 
-### Environment Variables
+```bash
+poolside config preset use fast
+```
 
-| Variable                  | Required | Description                                     |
-| ------------------------- | -------- | ----------------------------------------------- |
-| `POOLSIDE_OPENAI_API_KEY` | Yes      | OpenAI API key for generating coding prompts    |
-| `POOLSIDE_JIRA_HOST`      | Yes\*    | JIRA server hostname (without https://)         |
-| `POOLSIDE_JIRA_USERNAME`  | Yes\*    | JIRA username                                   |
-| `POOLSIDE_JIRA_PASSWORD`  | Yes\*    | JIRA password or Personal Access Token          |
-| `POOLSIDE_GITHUB_TOKEN`   | No\*\*   | GitHub Personal Access Token for release notes  |
-| `POOLSIDE_AI_MODEL`       | No       | OpenAI model to use (default: gpt-4o)           |
-| `POOLSIDE_AI_MAX_TOKENS`  | No       | Maximum tokens for AI responses (default: 4000) |
+#### `config preset add <name>`
 
+Add a custom AI preset.
+
+```bash
+poolside config preset add my-preset --provider openai --model gpt-4-turbo
+```
+
+#### `config preset remove <name>`
+
+Remove a custom AI preset.
+
+```bash
+poolside config preset remove my-preset
+```
+
+### Credential Keys
+
+Credentials can be set via `poolside config set <key> <value>` or as environment variables:
+
+| Config Key       | Environment Variable          | Required | Description                                     |
+| ---------------- | ----------------------------- | -------- | ----------------------------------------------- |
+| `openaiApiKey`   | `POOLSIDE_OPENAI_API_KEY`     | Yes†     | OpenAI API key for generating coding prompts    |
+| `anthropicApiKey`| `POOLSIDE_ANTHROPIC_API_KEY`  | Yes†     | Anthropic API key (alternative to OpenAI)       |
+| `jiraHost`       | `POOLSIDE_JIRA_HOST`          | Yes\*    | JIRA server hostname (without https://)         |
+| `jiraUsername`   | `POOLSIDE_JIRA_USERNAME`      | Yes\*    | JIRA username                                   |
+| `jiraPassword`   | `POOLSIDE_JIRA_PASSWORD`      | Yes\*    | JIRA password or Personal Access Token          |
+| `githubToken`    | `POOLSIDE_GITHUB_TOKEN`       | No\*\*   | GitHub Personal Access Token for release notes  |
+| `aiModel`        | `POOLSIDE_AI_MODEL`           | No       | AI model to use (default: gpt-5.2)              |
+| `aiMaxTokens`    | `POOLSIDE_AI_MAX_TOKENS`      | No       | Maximum tokens for AI responses (default: 4000) |
+| `aiProvider`     | `POOLSIDE_AI_PROVIDER`        | No       | AI provider: "openai" or "anthropic"            |
+
+†At least one AI provider API key is required (OpenAI or Anthropic)
 \*Required for epic automation workflows
 \*\*Required for release notes generation
 
@@ -365,11 +414,17 @@ poolside generate-single-repo --repo owner/repository --month 2024-01
 ### Setup and Configuration
 
 ```bash
-# Interactive setup wizard
+# Interactive setup wizard (recommended)
 poolside setup
 
-# Set up environment file
-poolside setup env
+# Set credentials directly
+poolside config set openaiApiKey sk-your-api-key
+poolside config set jiraHost your-company.atlassian.net
+poolside config set jiraUsername your_username
+poolside config set jiraPassword your_password
+
+# View all credentials and presets
+poolside config
 
 # Set up JIRA Personal Access Token
 poolside setup jira-pat
@@ -377,14 +432,11 @@ poolside setup jira-pat
 # Initialize release notes config
 poolside setup release
 
-# Check current configuration
-poolside setup check
+# Add PR changelog workflow
+poolside setup changelog
 
 # Test all connections
-poolside setup test
-
-# Validate setup and test connections
-poolside setup validate
+poolside config test
 ```
 
 ### Output
@@ -587,8 +639,8 @@ For **release notes generation**, you need a GitHub Personal Access Token with s
    ✅ Metadata: Read           - Access repository metadata (mandatory)
    ✅ Pull requests: Read      - List and read pull requests (required!)
    ```
-5. **Copy the token** and add to your `.env` file
-6. **Test the token**: `poolside setup test`
+5. **Save the token**: `poolside config set githubToken ghp_your_token_here`
+6. **Test the token**: `poolside config test`
 
 > **Important**: The "Pull requests: Read" permission is essential for accessing PR data. Without it, you'll get "Resource not accessible by personal access token" errors.
 
@@ -620,8 +672,8 @@ For **release notes generation**, you need a GitHub Personal Access Token with s
 4. **Select scopes**:
    - For maximum compatibility: `repo` + `read:org`
    - For public repos only: `public_repo` + `read:org`
-5. **Copy the token** and add to your `.env` file
-6. **Test the token**: `poolside setup test`
+5. **Save the token**: `poolside config set githubToken ghp_your_token_here`
+6. **Test the token**: `poolside config test`
 
 ### Common Token Issues
 
@@ -637,7 +689,7 @@ For **release notes generation**, you need a GitHub Personal Access Token with s
 After setup, verify your token works:
 
 ```bash
-poolside setup test
+poolside config test
 ```
 
 This will validate:

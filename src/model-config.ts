@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -11,13 +12,40 @@ export interface ModelPreset {
   description?: string;
 }
 
+export interface PoolsideCredentials {
+  openaiApiKey?: string;
+  anthropicApiKey?: string;
+  jiraHost?: string;
+  jiraUsername?: string;
+  jiraPassword?: string;
+  githubToken?: string;
+  slackWebhookUrl?: string;
+  aiModel?: string;
+  aiProvider?: string;
+  aiMaxTokens?: number;
+  aiRequestTimeoutMs?: number;
+}
+
+export type CredentialKey = keyof PoolsideCredentials;
+
+export const CREDENTIAL_ENV_MAP: Record<CredentialKey, string> = {
+  openaiApiKey: "POOLSIDE_OPENAI_API_KEY",
+  anthropicApiKey: "POOLSIDE_ANTHROPIC_API_KEY",
+  jiraHost: "POOLSIDE_JIRA_HOST",
+  jiraUsername: "POOLSIDE_JIRA_USERNAME",
+  jiraPassword: "POOLSIDE_JIRA_PASSWORD",
+  githubToken: "POOLSIDE_GITHUB_TOKEN",
+  slackWebhookUrl: "POOLSIDE_SLACK_WEBHOOK_URL",
+  aiModel: "POOLSIDE_AI_MODEL",
+  aiProvider: "POOLSIDE_AI_PROVIDER",
+  aiMaxTokens: "POOLSIDE_AI_MAX_TOKENS",
+  aiRequestTimeoutMs: "POOLSIDE_AI_REQUEST_TIMEOUT_MS",
+};
+
 export interface PoolsideConfig {
   activePreset?: string;
   presets: Record<string, ModelPreset>;
-  apiKeys?: {
-    openai?: string;
-    anthropic?: string;
-  };
+  credentials?: PoolsideCredentials;
 }
 
 // Built-in presets
@@ -37,7 +65,7 @@ export const BUILT_IN_PRESETS: Record<string, ModelPreset> = {
   balanced: {
     name: "balanced",
     provider: "openai",
-    model: "gpt-4o",
+    model: "gpt-5.2",
     description: "Good balance of speed/quality",
   },
   cheap: {
@@ -102,7 +130,20 @@ export class ConfigManager {
       const content = await fs.readFile(this.configPath, "utf8");
       return JSON.parse(content) as PoolsideConfig;
     } catch (error) {
-      // Return default config if file doesn't exist
+      return {
+        presets: {},
+      };
+    }
+  }
+
+  /**
+   * Read the configuration file synchronously (for use in sync contexts)
+   */
+  readConfigSync(): PoolsideConfig {
+    try {
+      const content = fsSync.readFileSync(this.configPath, "utf8");
+      return JSON.parse(content) as PoolsideConfig;
+    } catch (error) {
       return {
         presets: {},
       };
@@ -281,11 +322,10 @@ export class ConfigManager {
       );
     }
 
-    // 3. POOLSIDE_AI_MODEL + POOLSIDE_AI_PROVIDER env vars
-    const envModel = process.env.POOLSIDE_AI_MODEL;
-    const envProvider = process.env.POOLSIDE_AI_PROVIDER?.toLowerCase() as
-      | AIProvider
-      | undefined;
+    // 3. POOLSIDE_AI_MODEL + POOLSIDE_AI_PROVIDER env vars (or from config)
+    const envModel = process.env.POOLSIDE_AI_MODEL || config.credentials?.aiModel;
+    const envProviderRaw = process.env.POOLSIDE_AI_PROVIDER || config.credentials?.aiProvider;
+    const envProvider = envProviderRaw?.toLowerCase() as AIProvider | undefined;
     if (envModel && envProvider) {
       return {
         provider: envProvider,
@@ -344,13 +384,22 @@ export class ConfigManager {
   }
 
   /**
-   * Get the API key for a provider
+   * Get the API key for a provider (checks env var first, then config)
    */
   getApiKeyForProvider(provider: AIProvider): string | undefined {
     if (provider === "anthropic") {
-      return process.env.POOLSIDE_ANTHROPIC_API_KEY;
+      const envKey = process.env.POOLSIDE_ANTHROPIC_API_KEY;
+      if (envKey) return envKey;
+
+      const config = this.readConfigSync();
+      return config.credentials?.anthropicApiKey;
     }
-    return process.env.POOLSIDE_OPENAI_API_KEY;
+
+    const envKey = process.env.POOLSIDE_OPENAI_API_KEY;
+    if (envKey) return envKey;
+
+    const config = this.readConfigSync();
+    return config.credentials?.openaiApiKey;
   }
 
   /**
@@ -361,5 +410,126 @@ export class ConfigManager {
     return (
       !!key && !key.startsWith("sk-your_") && !key.startsWith("sk-ant-your_")
     );
+  }
+
+  /**
+   * Get a credential value (checks env var first, then config file)
+   * Resolution order: CLI flags -> Environment Variables -> Config file -> Default
+   */
+  async getCredential(key: CredentialKey): Promise<string | number | undefined> {
+    const envVar = CREDENTIAL_ENV_MAP[key];
+    const envValue = process.env[envVar];
+    if (envValue !== undefined && envValue !== "") {
+      if (key === "aiMaxTokens" || key === "aiRequestTimeoutMs") {
+        return Number.parseInt(envValue, 10);
+      }
+      return envValue;
+    }
+
+    const config = await this.readConfig();
+    return config.credentials?.[key];
+  }
+
+  /**
+   * Get a credential value synchronously from env only (for use in sync contexts)
+   */
+  getCredentialFromEnv(key: CredentialKey): string | undefined {
+    const envVar = CREDENTIAL_ENV_MAP[key];
+    return process.env[envVar];
+  }
+
+  /**
+   * Set a credential in the config file
+   */
+  async setCredential(key: CredentialKey, value: string | number): Promise<void> {
+    const config = await this.readConfig();
+
+    if (!config.credentials) {
+      config.credentials = {};
+    }
+
+    if (key === "aiMaxTokens" || key === "aiRequestTimeoutMs") {
+      config.credentials[key] = typeof value === "number" ? value : Number.parseInt(String(value), 10);
+    } else {
+      config.credentials[key] = String(value);
+    }
+
+    await this.writeConfig(config);
+  }
+
+  /**
+   * Remove a credential from the config file
+   */
+  async unsetCredential(key: CredentialKey): Promise<void> {
+    const config = await this.readConfig();
+
+    if (config.credentials) {
+      delete config.credentials[key];
+
+      if (Object.keys(config.credentials).length === 0) {
+        delete config.credentials;
+      }
+    }
+
+    await this.writeConfig(config);
+  }
+
+  /**
+   * Get all stored credentials (for display, with env vars merged)
+   */
+  async getAllCredentials(): Promise<{
+    stored: Partial<PoolsideCredentials>;
+    fromEnv: Partial<Record<CredentialKey, string>>;
+    effective: Partial<Record<CredentialKey, string | number>>;
+  }> {
+    const config = await this.readConfig();
+    const stored = config.credentials || {};
+
+    const fromEnv: Partial<Record<CredentialKey, string>> = {};
+    const effective: Partial<Record<CredentialKey, string | number>> = {};
+
+    for (const [key, envVar] of Object.entries(CREDENTIAL_ENV_MAP)) {
+      const credKey = key as CredentialKey;
+      const envValue = process.env[envVar];
+
+      if (envValue !== undefined && envValue !== "") {
+        fromEnv[credKey] = envValue;
+        if (credKey === "aiMaxTokens" || credKey === "aiRequestTimeoutMs") {
+          effective[credKey] = Number.parseInt(envValue, 10);
+        } else {
+          effective[credKey] = envValue;
+        }
+      } else if (stored[credKey] !== undefined) {
+        effective[credKey] = stored[credKey];
+      }
+    }
+
+    return { stored, fromEnv, effective };
+  }
+
+  /**
+   * Convert a credential key to its environment variable name
+   */
+  static getEnvVarName(key: CredentialKey): string {
+    return CREDENTIAL_ENV_MAP[key];
+  }
+
+  /**
+   * Convert an environment variable name to its credential key
+   */
+  static getCredentialKey(envVar: string): CredentialKey | undefined {
+    for (const [key, value] of Object.entries(CREDENTIAL_ENV_MAP)) {
+      if (value === envVar) {
+        return key as CredentialKey;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Check if a string is a valid credential key
+   */
+  static isValidCredentialKey(key: string): key is CredentialKey {
+    return key in CREDENTIAL_ENV_MAP;
   }
 }
