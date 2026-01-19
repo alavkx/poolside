@@ -1,5 +1,39 @@
 # poolside
 
+## 0.8.0
+
+### Minor Changes
+
+- Unified configuration system with ~/.poolside/config.json
+
+  **New Features:**
+
+  - ConfigManager for secure credential storage in ~/.poolside/config.json
+  - Environment variables (POOLSIDE\_\*) take precedence over config file for CI/CD
+  - New `config` command group: show, set, get, unset, test, preset subcommands
+  - `setup changelog` command for GitHub Actions PR summary workflow
+  - Anthropic API key support as alternative AI provider
+
+  **Improvements:**
+
+  - Interactive `poolside setup` wizard prompts for credentials directly
+  - Default AI model updated to gpt-5.2
+  - Better credential validation with clear error messages
+  - Connection test always shows status for JIRA, GitHub, and AI
+
+  **Removed:**
+
+  - `setup env` command (replaced by `poolside setup` and `config set`)
+  - `setup check` command (replaced by `poolside config`)
+  - `setup test` command (replaced by `poolside config test`)
+  - `setup validate` command (functionality merged into `config test`)
+
+  **Technical:**
+
+  - New CREDENTIAL_ENV_MAP export for credential key to env var mapping
+  - ConfigManager.getCredentialKey() and getEnvVarName() static methods
+  - Comprehensive validate-config integration tests
+
 ## 0.7.0
 
 ### Minor Changes
