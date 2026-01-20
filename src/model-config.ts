@@ -95,6 +95,16 @@ export interface ModelResolutionOptions {
   cliPreset?: string; // Preset name from CLI
 }
 
+const REASONING_MODEL_PATTERNS = [
+  /^o1/,
+  /^o3/,
+  /^gpt-5/,
+];
+
+export function isReasoningModel(model: string): boolean {
+  return REASONING_MODEL_PATTERNS.some((pattern) => pattern.test(model));
+}
+
 export class ConfigManager {
   private configDir: string;
   private configPath: string;

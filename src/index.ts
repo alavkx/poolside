@@ -713,7 +713,7 @@ program
 
         const title = editorResult.output.notes.title || "Meeting Notes";
         const slugifiedTitle = slugify(title);
-        const dateId = metadata.date || "undated";
+        const dateId = (metadata.date || "undated").replace(/\//g, "-");
         const outputFilename = `${slugifiedTitle}-${dateId}.md`;
         const outputPath = path.resolve(process.cwd(), outputFilename);
 

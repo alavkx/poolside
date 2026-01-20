@@ -21,6 +21,7 @@ const mockRefinedMeeting: RefinedMeeting = {
 			id: "D2",
 			decision: "Target Q1 for dashboard release",
 			madeBy: "John",
+			rationale: null,
 			quote: "We're targeting Q1 for the dashboard redesign",
 		},
 	],
@@ -120,6 +121,41 @@ function createMockExtraction(overrides: Partial<ChunkExtraction> = {}): ChunkEx
 		...overrides,
 	};
 }
+
+const mockRefinedMeetingWithNulls: RefinedMeeting = {
+	decisions: [
+		{
+			id: "D1",
+			decision: "Use React for the frontend",
+			madeBy: null,
+			rationale: null,
+			quote: "Let's go with React for the frontend",
+		},
+	],
+	actionItems: [
+		{
+			id: "A1",
+			task: "Create wireframes for dashboard",
+			owner: null,
+			deadline: null,
+			priority: null,
+			quote: "Someone should create wireframes",
+		},
+	],
+	deliverables: [
+		{
+			id: "DEL1",
+			name: "Dashboard Redesign",
+			description: "New analytics dashboard with real-time metrics",
+			timeline: null,
+			owner: null,
+			quote: "We need a dashboard redesign",
+		},
+	],
+	meetingSummary: "Team decided to use React.",
+	attendees: ["Sarah"],
+	openQuestions: [],
+};
 
 describe("MeetingRefiner", () => {
 	beforeEach(() => {

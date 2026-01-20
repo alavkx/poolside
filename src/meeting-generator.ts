@@ -17,6 +17,7 @@ import {
 	type AIProvider,
 	type ResolvedModel,
 	ConfigManager,
+	isReasoningModel,
 } from "./model-config.js";
 import type { PipelineProgress } from "./meeting-progress.js";
 import { wrapError } from "./meeting-errors.js";
@@ -222,7 +223,7 @@ export class MeetingGenerator {
 				id: d.id,
 				title: d.decision,
 				description: d.rationale || d.decision,
-				rationale: d.rationale,
+				rationale: d.rationale ?? undefined,
 				participants: d.madeBy ? [d.madeBy] : [],
 				relatedActionItems: [],
 			})),
@@ -230,8 +231,8 @@ export class MeetingGenerator {
 				id: a.id,
 				owner: a.owner || "TBD",
 				task: a.task,
-				dueDate: a.deadline,
-				priority: a.priority || "medium",
+				dueDate: a.deadline ?? undefined,
+				priority: a.priority ?? "medium",
 				status: "open" as const,
 				context: a.quote,
 			})),
@@ -283,7 +284,7 @@ export class MeetingGenerator {
 				schema: PRDSchema,
 				system: PRD_GENERATION_SYSTEM_PROMPT,
 				prompt,
-				temperature: 0.2,
+				...(isReasoningModel(this.config.model) ? {} : { temperature: 0.2 }),
 				maxOutputTokens: this.config.maxTokens,
 				abortSignal: abortController.signal,
 			});

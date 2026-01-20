@@ -2,21 +2,21 @@ import { z } from "zod";
 
 export const ExtractedDecisionSchema = z.object({
 	decision: z.string().describe("What was decided"),
-	madeBy: z.string().optional().describe("Who made/announced the decision"),
+	madeBy: z.string().nullable().describe("Who made/announced the decision"),
 	quote: z.string().describe("Supporting quote from transcript"),
 });
 
 export const ExtractedActionItemSchema = z.object({
 	task: z.string().describe("What needs to be done"),
-	owner: z.string().optional().describe("Who is responsible"),
-	deadline: z.string().optional().describe("When it's due"),
+	owner: z.string().nullable().describe("Who is responsible"),
+	deadline: z.string().nullable().describe("When it's due"),
 	quote: z.string().describe("Supporting quote from transcript"),
 });
 
 export const ExtractedDeliverableSchema = z.object({
 	name: z.string().describe("Feature or deliverable name"),
 	description: z.string().describe("What it is"),
-	timeline: z.string().optional().describe("Rough timeline mentioned"),
+	timeline: z.string().nullable().describe("Rough timeline mentioned"),
 	quote: z.string().describe("Supporting quote from transcript"),
 });
 
@@ -43,19 +43,19 @@ export const ChunkExtractionSchema = z.object({
 export const RefinedDecisionSchema = z.object({
 	id: z.string().describe("Unique identifier for this decision"),
 	decision: z.string().describe("Clear statement of what was decided"),
-	madeBy: z.string().optional().describe("Who made or announced the decision"),
-	rationale: z.string().optional().describe("Why this decision was made"),
+	madeBy: z.string().nullable().describe("Who made or announced the decision"),
+	rationale: z.string().nullable().describe("Why this decision was made"),
 	quote: z.string().describe("Supporting quote from transcript"),
 });
 
 export const RefinedActionItemSchema = z.object({
 	id: z.string().describe("Unique identifier for this action item"),
 	task: z.string().describe("Clear description of what needs to be done"),
-	owner: z.string().optional().describe("Person responsible for this task"),
-	deadline: z.string().optional().describe("When this is due"),
+	owner: z.string().nullable().describe("Person responsible for this task"),
+	deadline: z.string().nullable().describe("When this is due"),
 	priority: z
 		.enum(["high", "medium", "low"])
-		.optional()
+		.nullable()
 		.describe("Priority level based on discussion context"),
 	quote: z.string().describe("Supporting quote from transcript"),
 });
@@ -64,8 +64,8 @@ export const RefinedDeliverableSchema = z.object({
 	id: z.string().describe("Unique identifier for this deliverable"),
 	name: z.string().describe("Name of the feature or deliverable"),
 	description: z.string().describe("What this deliverable is and does"),
-	timeline: z.string().optional().describe("Target timeline if mentioned"),
-	owner: z.string().optional().describe("Person or team responsible"),
+	timeline: z.string().nullable().describe("Target timeline if mentioned"),
+	owner: z.string().nullable().describe("Person or team responsible"),
 	quote: z.string().describe("Supporting quote from transcript"),
 });
 
@@ -106,7 +106,7 @@ export const PRDSchema = z.object({
 	requirements: z
 		.array(PRDRequirementSchema)
 		.describe("List of functional requirements"),
-	timeline: z.string().optional().describe("Target delivery timeline"),
+	timeline: z.string().nullable().describe("Target delivery timeline"),
 	dependencies: z
 		.array(z.string())
 		.describe("External dependencies or blockers"),
@@ -117,7 +117,7 @@ export const PRDSchema = z.object({
 
 export const EditedMeetingNotesSchema = z.object({
 	title: z.string().describe("Meeting title"),
-	date: z.string().optional().describe("Meeting date if mentioned"),
+	date: z.string().nullable().describe("Meeting date if mentioned"),
 	attendees: z.array(z.string()).describe("List of attendees"),
 	summary: z.string().describe("Polished executive summary"),
 	decisions: z.array(RefinedDecisionSchema).describe("Polished decisions list"),
@@ -129,7 +129,7 @@ export const EditedMeetingNotesSchema = z.object({
 
 export const FinalOutputSchema = z.object({
 	notes: EditedMeetingNotesSchema.describe("Polished meeting notes"),
-	prd: PRDSchema.optional().describe(
+	prd: PRDSchema.nullable().describe(
 		"PRD document if deliverables were discussed",
 	),
 });

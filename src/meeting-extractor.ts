@@ -11,6 +11,7 @@ import {
 	type AIProvider,
 	type ResolvedModel,
 	ConfigManager,
+	isReasoningModel,
 } from "./model-config.js";
 import type { PipelineProgress } from "./meeting-progress.js";
 import { wrapError } from "./meeting-errors.js";
@@ -232,7 +233,7 @@ export class MeetingExtractor {
 				schema: ChunkExtractionSchema,
 				system: EXTRACTION_SYSTEM_PROMPT,
 				prompt,
-				temperature: 0.1,
+				...(isReasoningModel(this.config.model) ? {} : { temperature: 0.1 }),
 				maxOutputTokens: this.config.maxTokens,
 				abortSignal: abortController.signal,
 			});

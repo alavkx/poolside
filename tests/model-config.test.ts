@@ -5,6 +5,7 @@ import {
   CREDENTIAL_ENV_MAP,
   type CredentialKey,
   type PoolsideConfig,
+  isReasoningModel,
 } from "../src/model-config";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -343,5 +344,33 @@ describe("Model Config", () => {
       const apiKey = configManager.getApiKeyForProvider("openai");
       expect(apiKey).toBe("sk-env-key");
     });
+  });
+});
+
+describe("isReasoningModel", () => {
+  it("should return true for o1 models", () => {
+    expect(isReasoningModel("o1")).toBe(true);
+    expect(isReasoningModel("o1-mini")).toBe(true);
+    expect(isReasoningModel("o1-preview")).toBe(true);
+  });
+
+  it("should return true for o3 models", () => {
+    expect(isReasoningModel("o3")).toBe(true);
+    expect(isReasoningModel("o3-mini")).toBe(true);
+  });
+
+  it("should return true for gpt-5 models", () => {
+    expect(isReasoningModel("gpt-5")).toBe(true);
+    expect(isReasoningModel("gpt-5.2")).toBe(true);
+    expect(isReasoningModel("gpt-5.2-mini")).toBe(true);
+  });
+
+  it("should return false for non-reasoning models", () => {
+    expect(isReasoningModel("gpt-4")).toBe(false);
+    expect(isReasoningModel("gpt-4-turbo")).toBe(false);
+    expect(isReasoningModel("gpt-4o")).toBe(false);
+    expect(isReasoningModel("gpt-3.5-turbo")).toBe(false);
+    expect(isReasoningModel("claude-3-opus")).toBe(false);
+    expect(isReasoningModel("claude-sonnet-4-20250514")).toBe(false);
   });
 });

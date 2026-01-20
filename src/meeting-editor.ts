@@ -13,6 +13,7 @@ import {
 	type AIProvider,
 	type ResolvedModel,
 	ConfigManager,
+	isReasoningModel,
 } from "./model-config.js";
 import type { PipelineProgress } from "./meeting-progress.js";
 import { wrapError } from "./meeting-errors.js";
@@ -34,7 +35,7 @@ export interface EditorResult {
 
 const EditedNotesSchema = z.object({
 	title: z.string().describe("Polished meeting title"),
-	date: z.string().optional().describe("Meeting date if mentioned"),
+	date: z.string().nullable().describe("Meeting date if mentioned"),
 	attendees: z.array(z.string()).describe("List of attendees"),
 	summary: z.string().describe("Polished executive summary - clear and actionable"),
 	decisions: z.array(
@@ -42,7 +43,7 @@ const EditedNotesSchema = z.object({
 			id: z.string(),
 			title: z.string().describe("Clear, actionable decision statement"),
 			description: z.string(),
-			rationale: z.string().optional(),
+			rationale: z.string().nullable(),
 			participants: z.array(z.string()),
 			relatedActionItems: z.array(z.string()),
 		})
@@ -52,10 +53,10 @@ const EditedNotesSchema = z.object({
 			id: z.string(),
 			owner: z.string(),
 			task: z.string().describe("Clear, actionable task description"),
-			dueDate: z.string().optional(),
+			dueDate: z.string().nullable(),
 			priority: z.enum(["high", "medium", "low"]),
 			status: z.enum(["open", "in_progress", "completed"]),
-			context: z.string().optional(),
+			context: z.string().nullable(),
 		})
 	),
 	keyDiscussionPoints: z.array(
@@ -80,17 +81,17 @@ const EditedPRDSchema = z.object({
 	),
 	timeline: z
 		.object({
-			target: z.string().optional(),
+			target: z.string().nullable(),
 			milestones: z.array(z.string()),
 		})
-		.optional(),
+		.nullable(),
 	dependencies: z.array(z.string()),
 	openQuestions: z.array(z.string()),
 });
 
 const EditingResultSchema = z.object({
 	notes: EditedNotesSchema,
-	prd: EditedPRDSchema.optional(),
+	prd: EditedPRDSchema.nullable(),
 	changesApplied: z
 		.array(z.string())
 		.describe("List of specific changes made for consistency and clarity"),
@@ -266,7 +267,7 @@ export class MeetingEditor {
 				schema: EditingResultSchema,
 				system: EDITING_SYSTEM_PROMPT,
 				prompt,
-				temperature: 0.1,
+				...(isReasoningModel(this.config.model) ? {} : { temperature: 0.1 }),
 				maxOutputTokens: this.config.maxTokens,
 				abortSignal: abortController.signal,
 			});
@@ -346,14 +347,14 @@ export class MeetingEditor {
 	): MeetingNotes {
 		return {
 			title: edited.title,
-			date: edited.date,
+			date: edited.date ?? undefined,
 			attendees: edited.attendees,
 			summary: edited.summary,
 			decisions: edited.decisions.map((d) => ({
 				id: d.id,
 				title: d.title,
 				description: d.description,
-				rationale: d.rationale,
+				rationale: d.rationale ?? undefined,
 				participants: d.participants,
 				relatedActionItems: d.relatedActionItems,
 			})),
@@ -361,10 +362,10 @@ export class MeetingEditor {
 				id: a.id,
 				owner: a.owner,
 				task: a.task,
-				dueDate: a.dueDate,
+				dueDate: a.dueDate ?? undefined,
 				priority: a.priority,
 				status: a.status,
-				context: a.context,
+				context: a.context ?? undefined,
 			})),
 			keyDiscussionPoints: edited.keyDiscussionPoints,
 			openQuestions: edited.openQuestions,
@@ -383,7 +384,10 @@ export class MeetingEditor {
 				priority: r.priority,
 				status: r.status,
 			})),
-			timeline: edited.timeline,
+			timeline: edited.timeline ? {
+				target: edited.timeline.target ?? undefined,
+				milestones: edited.timeline.milestones,
+			} : undefined,
 			dependencies: edited.dependencies,
 			openQuestions: edited.openQuestions,
 		};

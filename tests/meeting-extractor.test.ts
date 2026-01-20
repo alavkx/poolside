@@ -37,6 +37,34 @@ const mockExtraction: ChunkExtraction = {
 	summaryForNextChunk: "Team decided on React for frontend. Mike is creating wireframes by Friday. Dashboard redesign targeted for Q1.",
 };
 
+const mockExtractionWithNulls: ChunkExtraction = {
+	decisions: [
+		{
+			decision: "Use React for the frontend",
+			madeBy: null,
+			quote: "Let's go with React for the frontend",
+		},
+	],
+	actionItems: [
+		{
+			task: "Create wireframes for dashboard",
+			owner: null,
+			deadline: null,
+			quote: "Someone should create wireframes",
+		},
+	],
+	deliverables: [
+		{
+			name: "Dashboard Redesign",
+			description: "New analytics dashboard with real-time metrics",
+			timeline: null,
+			quote: "We need a dashboard redesign",
+		},
+	],
+	keyPoints: ["Team discussed frontend framework options"],
+	summaryForNextChunk: "Team decided on React for frontend.",
+};
+
 function createMockChunk(index: number, content: string): TranscriptChunk {
 	return {
 		index,
@@ -200,6 +228,57 @@ John: We're targeting Q1 for the dashboard redesign.`),
 
 			expect(result.totalChunks).toBe(1);
 			expect(result.extractions).toHaveLength(1);
+		});
+	});
+
+	describe("null value handling", () => {
+		beforeEach(() => {
+			server.use(
+				http.post("https://api.openai.com/v1/responses", () => {
+					return HttpResponse.json({
+						id: "resp-test",
+						object: "response",
+						created_at: Date.now(),
+						status: "completed",
+						output: [
+							{
+								type: "message",
+								id: "msg-test",
+								status: "completed",
+								role: "assistant",
+								content: [
+									{
+										type: "output_text",
+										text: JSON.stringify(mockExtractionWithNulls),
+										annotations: [],
+									},
+								],
+							},
+						],
+						usage: {
+							input_tokens: 100,
+							output_tokens: 200,
+							total_tokens: 300,
+						},
+					});
+				})
+			);
+		});
+
+		it("should handle extractions with null optional fields", async () => {
+			const extractor = new MeetingExtractor("test-api-key");
+			const chunks = [createMockChunk(0, "Sarah: Let's use React.")];
+
+			const result = await extractor.extractFromChunks(chunks);
+
+			expect(result.totalChunks).toBe(1);
+			expect(result.extractions).toHaveLength(1);
+			
+			const extraction = result.extractions[0];
+			expect(extraction.decisions[0].madeBy).toBeNull();
+			expect(extraction.actionItems[0].owner).toBeNull();
+			expect(extraction.actionItems[0].deadline).toBeNull();
+			expect(extraction.deliverables[0].timeline).toBeNull();
 		});
 	});
 

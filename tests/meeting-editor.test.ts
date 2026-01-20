@@ -27,6 +27,7 @@ const mockMeetingNotes: MeetingNotes = {
 			id: "D2",
 			title: "Target Q1 for dashboard release",
 			description: "Aggressive but achievable timeline",
+			rationale: undefined,
 			participants: ["John"],
 			relatedActionItems: [],
 		},
@@ -48,6 +49,7 @@ const mockMeetingNotes: MeetingNotes = {
 			dueDate: "Next week",
 			priority: "medium",
 			status: "open",
+			context: undefined,
 		},
 	],
 	keyDiscussionPoints: [
@@ -104,6 +106,7 @@ const mockEditedResponse = {
 				id: "D2",
 				title: "Target Q1 2026 for dashboard release",
 				description: "Aggressive but achievable timeline agreed upon",
+				rationale: null,
 				participants: ["John Smith"],
 				relatedActionItems: [],
 			},
@@ -125,6 +128,7 @@ const mockEditedResponse = {
 				dueDate: "January 24, 2026",
 				priority: "medium" as const,
 				status: "open" as const,
+				context: null,
 			},
 		],
 		keyDiscussionPoints: [
