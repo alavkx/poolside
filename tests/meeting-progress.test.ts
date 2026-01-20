@@ -6,6 +6,7 @@ import {
 	formatCount,
 	type PipelineStage,
 	type MeetingProgressConfig,
+	type ChunkResultStats,
 } from "../src/meeting-progress";
 
 describe("MeetingProgressReporter", () => {
@@ -227,6 +228,259 @@ describe("MeetingProgressReporter", () => {
 			reporter.start("Processing...");
 			reporter.info("Info message");
 			reporter.stop();
+		});
+	});
+
+	describe("phaseIntro", () => {
+		it("should not output when silent", () => {
+			const reporter = new MeetingProgressReporter({ silent: true });
+			reporter.phaseIntro("Analyzing transcript...");
+			expect(consoleSpy).not.toHaveBeenCalled();
+		});
+
+		it("should output phase intro message", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.phaseIntro("Analyzing transcript with AI to extract decisions...");
+			expect(consoleSpy).toHaveBeenCalled();
+			const output = consoleSpy.mock.calls.flat().join(" ");
+			expect(output).toContain("Analyzing transcript");
+		});
+
+		it("should stop spinner before printing phase intro", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.start("Working...");
+			reporter.phaseIntro("Starting new phase...");
+			expect(consoleSpy).toHaveBeenCalled();
+		});
+
+		it("should not resume spinner after printing", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.start("Working...");
+			reporter.phaseIntro("New phase");
+			reporter.stop();
+		});
+	});
+
+	describe("startTimedSpinner", () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("should not output when silent", () => {
+			const reporter = new MeetingProgressReporter({ silent: true });
+			reporter.startTimedSpinner("Chunk 1/6 (~4,200 words)");
+			reporter.stopTimer();
+		});
+
+		it("should start spinner with base message", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.startTimedSpinner("Chunk 1/6 (~4,200 words)");
+			reporter.stopTimer();
+			reporter.stop();
+		});
+
+		it("should include ETA when provided", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.startTimedSpinner("Chunk 3/6 (~4,100 words)", 45000);
+			reporter.stopTimer();
+			reporter.stop();
+		});
+
+		it("should stop previous timer when starting new one", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.startTimedSpinner("First chunk");
+			reporter.startTimedSpinner("Second chunk");
+			reporter.stopTimer();
+			reporter.stop();
+		});
+
+		it("should stop previous spinner when starting new timed one", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.start("Regular spinner");
+			reporter.startTimedSpinner("Timed spinner");
+			reporter.stopTimer();
+			reporter.stop();
+		});
+	});
+
+	describe("stopTimer", () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("should clear timer interval", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.startTimedSpinner("Processing...");
+			reporter.stopTimer();
+			reporter.stop();
+		});
+
+		it("should handle stopTimer when no timer is active", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.stopTimer();
+		});
+
+		it("should handle multiple stopTimer calls", () => {
+			const reporter = new MeetingProgressReporter();
+			reporter.startTimedSpinner("Processing...");
+			reporter.stopTimer();
+			reporter.stopTimer();
+			reporter.stop();
+		});
+	});
+
+	describe("printChunkResult", () => {
+		it("should not output when silent", () => {
+			const reporter = new MeetingProgressReporter({ silent: true });
+			const stats: ChunkResultStats = {
+				chunkNum: 1,
+				total: 6,
+				decisions: 2,
+				actions: 4,
+				deliverables: 1,
+				timeMs: 22000,
+				runningTotals: { decisions: 2, actions: 4, deliverables: 1 },
+			};
+			reporter.printChunkResult(stats);
+			expect(consoleSpy).not.toHaveBeenCalled();
+		});
+
+		it("should print chunk result with all item types", () => {
+			const reporter = new MeetingProgressReporter();
+			const stats: ChunkResultStats = {
+				chunkNum: 1,
+				total: 6,
+				decisions: 2,
+				actions: 4,
+				deliverables: 1,
+				timeMs: 22000,
+				runningTotals: { decisions: 2, actions: 4, deliverables: 1 },
+			};
+			reporter.printChunkResult(stats);
+			expect(consoleSpy).toHaveBeenCalled();
+			const output = consoleSpy.mock.calls.flat().join(" ");
+			expect(output).toContain("Chunk 1/6");
+			expect(output).toContain("2 decisions");
+			expect(output).toContain("4 actions");
+			expect(output).toContain("1 deliverable");
+			expect(output).toContain("22.0s");
+			expect(output).toContain("[total: 2D, 4A, 1D]");
+		});
+
+		it("should print chunk result with only some item types", () => {
+			const reporter = new MeetingProgressReporter();
+			const stats: ChunkResultStats = {
+				chunkNum: 2,
+				total: 6,
+				decisions: 1,
+				actions: 2,
+				deliverables: 0,
+				timeMs: 18000,
+				runningTotals: { decisions: 3, actions: 6, deliverables: 1 },
+			};
+			reporter.printChunkResult(stats);
+			expect(consoleSpy).toHaveBeenCalled();
+			const output = consoleSpy.mock.calls.flat().join(" ");
+			expect(output).toContain("Chunk 2/6");
+			expect(output).toContain("1 decision");
+			expect(output).toContain("2 actions");
+			expect(output).not.toContain("deliverable");
+		});
+
+		it("should print 'no items' when nothing found", () => {
+			const reporter = new MeetingProgressReporter();
+			const stats: ChunkResultStats = {
+				chunkNum: 3,
+				total: 6,
+				decisions: 0,
+				actions: 0,
+				deliverables: 0,
+				timeMs: 15000,
+				runningTotals: { decisions: 3, actions: 6, deliverables: 1 },
+			};
+			reporter.printChunkResult(stats);
+			expect(consoleSpy).toHaveBeenCalled();
+			const output = consoleSpy.mock.calls.flat().join(" ");
+			expect(output).toContain("no items");
+		});
+
+		it("should stop timer and spinner before printing", () => {
+			vi.useFakeTimers();
+			const reporter = new MeetingProgressReporter();
+			reporter.startTimedSpinner("Processing chunk...");
+			const stats: ChunkResultStats = {
+				chunkNum: 1,
+				total: 3,
+				decisions: 1,
+				actions: 1,
+				deliverables: 0,
+				timeMs: 10000,
+				runningTotals: { decisions: 1, actions: 1, deliverables: 0 },
+			};
+			reporter.printChunkResult(stats);
+			expect(consoleSpy).toHaveBeenCalled();
+			vi.useRealTimers();
+		});
+
+		it("should use singular form for single items", () => {
+			const reporter = new MeetingProgressReporter();
+			const stats: ChunkResultStats = {
+				chunkNum: 1,
+				total: 3,
+				decisions: 1,
+				actions: 1,
+				deliverables: 1,
+				timeMs: 5000,
+				runningTotals: { decisions: 1, actions: 1, deliverables: 1 },
+			};
+			reporter.printChunkResult(stats);
+			const output = consoleSpy.mock.calls.flat().join(" ");
+			expect(output).toContain("1 decision");
+			expect(output).toContain("1 action");
+			expect(output).toContain("1 deliverable");
+			expect(output).not.toContain("decisions");
+			expect(output).not.toContain("actions");
+			expect(output).not.toContain("deliverables");
+		});
+
+		it("should format time in milliseconds for short durations", () => {
+			const reporter = new MeetingProgressReporter();
+			const stats: ChunkResultStats = {
+				chunkNum: 1,
+				total: 1,
+				decisions: 0,
+				actions: 0,
+				deliverables: 0,
+				timeMs: 500,
+				runningTotals: { decisions: 0, actions: 0, deliverables: 0 },
+			};
+			reporter.printChunkResult(stats);
+			const output = consoleSpy.mock.calls.flat().join(" ");
+			expect(output).toContain("500ms");
+		});
+
+		it("should format time in minutes for long durations", () => {
+			const reporter = new MeetingProgressReporter();
+			const stats: ChunkResultStats = {
+				chunkNum: 1,
+				total: 1,
+				decisions: 1,
+				actions: 2,
+				deliverables: 0,
+				timeMs: 90000,
+				runningTotals: { decisions: 1, actions: 2, deliverables: 0 },
+			};
+			reporter.printChunkResult(stats);
+			const output = consoleSpy.mock.calls.flat().join(" ");
+			expect(output).toContain("1m 30s");
 		});
 	});
 

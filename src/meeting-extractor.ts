@@ -158,14 +158,32 @@ export class MeetingExtractor {
 		const extractions: ChunkExtraction[] = [];
 		let runningSummary = "";
 
+		const runningTotals = {
+			decisions: 0,
+			actions: 0,
+			deliverables: 0,
+		};
+
+		let totalChunkTimeMs = 0;
+		let completedChunks = 0;
+
 		this.debugLog(`Starting extraction for ${chunks.length} chunks`);
 
 		for (let i = 0; i < chunks.length; i++) {
 			const chunk = chunks[i];
+			const chunkStartTime = Date.now();
 
-			this.progress?.updateWithCount(i + 1, chunks.length, `Extracting from chunk`);
+			const wordCount = Math.round(chunk.content.length / 5);
+			const baseMessage = `Chunk ${i + 1}/${chunks.length} (~${wordCount.toLocaleString()} words)`;
+
+			const etaMs = completedChunks > 0 
+				? (totalChunkTimeMs / completedChunks) * (chunks.length - i)
+				: undefined;
+
+			this.progress?.startTimedSpinner(baseMessage, etaMs);
+
 			this.debugLog(`Processing chunk ${i + 1}/${chunks.length}`);
-			this.debugLog(`Chunk size: ${chunk.content.length} characters`);
+			this.debugLog(`Chunk size: ${chunk.content.length} characters (~${wordCount} words)`);
 			this.debugLog(`Speakers: ${chunk.speakersPresent.join(", ") || "unknown"}`);
 			if (runningSummary) {
 				this.debugLog(`Context from previous: ${runningSummary.slice(0, 100)}...`);
@@ -176,12 +194,31 @@ export class MeetingExtractor {
 				extractions.push(extraction);
 				runningSummary = extraction.summaryForNextChunk;
 
+				const chunkTimeMs = Date.now() - chunkStartTime;
+				totalChunkTimeMs += chunkTimeMs;
+				completedChunks++;
+
+				runningTotals.decisions += extraction.decisions.length;
+				runningTotals.actions += extraction.actionItems.length;
+				runningTotals.deliverables += extraction.deliverables.length;
+
+				this.progress?.printChunkResult({
+					chunkNum: i + 1,
+					total: chunks.length,
+					decisions: extraction.decisions.length,
+					actions: extraction.actionItems.length,
+					deliverables: extraction.deliverables.length,
+					timeMs: chunkTimeMs,
+					runningTotals: { ...runningTotals },
+				});
+
 				this.debugLog(`Chunk ${i + 1} results:`);
 				this.debugLog(`  Decisions: ${extraction.decisions.length}`);
 				this.debugLog(`  Action items: ${extraction.actionItems.length}`);
 				this.debugLog(`  Deliverables: ${extraction.deliverables.length}`);
 				this.debugLog(`  Key points: ${extraction.keyPoints.length}`);
 			} catch (error) {
+				this.progress?.stopTimer();
 				throw wrapError(error, "extraction", {
 					chunkIndex: i + 1,
 					totalChunks: chunks.length,

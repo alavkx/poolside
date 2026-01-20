@@ -652,7 +652,7 @@ program
 
         progress.succeed(`Chunking complete (${formatCount(chunks.length, "chunk")}, ${formatCount(metadata.attendees.length, "attendee")})`);
 
-        progress.start("Extracting from chunks...");
+        progress.phaseIntro("Analyzing transcript with AI to extract decisions, actions, and deliverables...");
         progress.setStage({ name: "extraction", number: 2, totalStages: TOTAL_STAGES });
 
         const extractor = await MeetingExtractor.create(componentConfig);
@@ -673,16 +673,18 @@ program
 
         progress.succeed(`Extraction complete (${totalDecisions} decisions, ${totalActionItems} actions, ${totalDeliverables} deliverables)`);
 
-        progress.start("Consolidating results...");
+        progress.phaseIntro("Consolidating and deduplicating findings...");
         progress.setStage({ name: "refinement", number: 3, totalStages: TOTAL_STAGES });
+        progress.start("Merging results from chunks...");
 
         const refiner = await MeetingRefiner.create(componentConfig);
         const refinementResult = await refiner.refine(extractionResult.extractions);
 
         progress.succeed(`Consolidated: ${refinementResult.refined.decisions.length} decisions, ${refinementResult.refined.actionItems.length} actions, ${refinementResult.refined.deliverables.length} deliverables`);
 
-        progress.start("Generating documents...");
+        progress.phaseIntro("Generating meeting notes and PRD...");
         progress.setStage({ name: "generation", number: 4, totalStages: TOTAL_STAGES });
+        progress.start("Creating documents...");
 
         const generator = await MeetingGenerator.create(componentConfig);
         const generatorResult = await generator.generate(refinementResult.refined, {
@@ -692,8 +694,9 @@ program
         const prdText = generatorResult.prdGenerated ? " + PRD" : "";
         progress.succeed(`Meeting notes${prdText} generated`);
 
-        progress.start("Final editing pass...");
+        progress.phaseIntro("Final polish for clarity and consistency...");
         progress.setStage({ name: "editing", number: 5, totalStages: TOTAL_STAGES });
+        progress.start("Applying improvements...");
 
         const editor = await MeetingEditor.create(componentConfig);
         const editorResult = await editor.edit(generatorResult.resources);

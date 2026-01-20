@@ -7,6 +7,20 @@ export interface PipelineStage {
 	totalStages: number;
 }
 
+export interface ChunkResultStats {
+	chunkNum: number;
+	total: number;
+	decisions: number;
+	actions: number;
+	deliverables: number;
+	timeMs: number;
+	runningTotals: {
+		decisions: number;
+		actions: number;
+		deliverables: number;
+	};
+}
+
 export interface PipelineProgress {
 	start(message: string): void;
 	update(message: string): void;
@@ -17,6 +31,10 @@ export interface PipelineProgress {
 	info(message: string): void;
 	setStage(stage: PipelineStage): void;
 	getCurrentStage(): PipelineStage | undefined;
+	phaseIntro(message: string): void;
+	startTimedSpinner(baseMessage: string, etaMs?: number): void;
+	stopTimer(): void;
+	printChunkResult(stats: ChunkResultStats): void;
 }
 
 export interface MeetingProgressConfig {
@@ -29,6 +47,9 @@ export class MeetingProgressReporter implements PipelineProgress {
 	private verbose: boolean;
 	private silent: boolean;
 	private currentStage: PipelineStage | undefined;
+	private timerInterval: ReturnType<typeof setInterval> | null = null;
+	private timerStartMs = 0;
+	private timerBaseMessage = "";
 
 	constructor(config: MeetingProgressConfig = {}) {
 		this.verbose = config.verbose ?? false;
@@ -141,7 +162,88 @@ export class MeetingProgressReporter implements PipelineProgress {
 		}
 	}
 
+	phaseIntro(message: string): void {
+		if (this.silent) return;
+
+		if (this.spinner) {
+			this.spinner.stop();
+			this.spinner = null;
+		}
+
+		console.log(chalk.white(`\n${message}`));
+	}
+
+	startTimedSpinner(baseMessage: string, etaMs?: number): void {
+		if (this.silent) return;
+
+		this.stopTimer();
+
+		this.timerStartMs = Date.now();
+		this.timerBaseMessage = baseMessage;
+
+		const buildMessage = (): string => {
+			const elapsed = Date.now() - this.timerStartMs;
+			const elapsedStr = formatDuration(elapsed);
+			let msg = `${this.timerBaseMessage} (${elapsedStr})`;
+			if (etaMs !== undefined && etaMs > 0) {
+				msg += ` • ~${formatDuration(etaMs)} remaining`;
+			}
+			return msg;
+		};
+
+		if (this.spinner) {
+			this.spinner.stop();
+		}
+
+		this.spinner = ora({
+			text: buildMessage(),
+			color: "cyan",
+		}).start();
+
+		this.timerInterval = setInterval(() => {
+			if (this.spinner) {
+				this.spinner.text = buildMessage();
+			}
+		}, 1000);
+	}
+
+	stopTimer(): void {
+		if (this.timerInterval) {
+			clearInterval(this.timerInterval);
+			this.timerInterval = null;
+		}
+	}
+
+	printChunkResult(stats: ChunkResultStats): void {
+		if (this.silent) return;
+
+		this.stopTimer();
+
+		if (this.spinner) {
+			this.spinner.stop();
+			this.spinner = null;
+		}
+
+		const parts: string[] = [];
+		if (stats.decisions > 0) {
+			parts.push(`${stats.decisions} decision${stats.decisions !== 1 ? "s" : ""}`);
+		}
+		if (stats.actions > 0) {
+			parts.push(`${stats.actions} action${stats.actions !== 1 ? "s" : ""}`);
+		}
+		if (stats.deliverables > 0) {
+			parts.push(`${stats.deliverables} deliverable${stats.deliverables !== 1 ? "s" : ""}`);
+		}
+
+		const findings = parts.length > 0 ? parts.join(", ") : "no items";
+		const timeStr = formatDuration(stats.timeMs);
+		const totalStr = `${stats.runningTotals.decisions}D, ${stats.runningTotals.actions}A, ${stats.runningTotals.deliverables}D`;
+
+		console.log(chalk.gray(`  Chunk ${stats.chunkNum}/${stats.total}: ${findings} (${timeStr}) [total: ${totalStr}]`));
+	}
+
 	stop(): void {
+		this.stopTimer();
 		if (this.spinner) {
 			this.spinner.stop();
 			this.spinner = null;
