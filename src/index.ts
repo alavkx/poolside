@@ -26,6 +26,12 @@ import {
   type CredentialKey,
 } from "./model-config.js";
 import { initChangelog, generateChangelogWorkflow } from "./init-changelog.js";
+import { TranscriptChunker } from "./transcript-chunker.js";
+import { MeetingExtractor } from "./meeting-extractor.js";
+import { MeetingRefiner } from "./meeting-refiner.js";
+import { MeetingGenerator } from "./meeting-generator.js";
+import { MeetingEditor } from "./meeting-editor.js";
+import type { ProcessedMeeting, ProcessingStats } from "./meeting-types.js";
 
 interface ValidationResult {
   key: string;
@@ -554,6 +560,242 @@ Run the command above and follow the generated prompt to complete your implement
 
     console.log(prompt);
   });
+
+program
+  .command("process-meeting <file>")
+  .description(
+    "Process a meeting transcript to extract decisions, action items, and generate meeting notes"
+  )
+  .option("-o, --output <file>", "Output file (default: stdout)")
+  .option(
+    "-f, --format <type>",
+    "Output format: markdown, json (default: markdown)",
+    "markdown"
+  )
+  .option("--no-prd", "Skip PRD generation even if deliverables are found")
+  .option("--preset <name>", "Use a named preset (e.g., fast, quality, balanced, cheap)")
+  .option(
+    "--model <provider:model>",
+    "Direct model override (e.g., anthropic:claude-3-haiku-20240307)"
+  )
+  .option("--verbose", "Show pipeline progress")
+  .action(
+    async (
+      file: string,
+      options: {
+        output?: string;
+        format: string;
+        prd: boolean;
+        preset?: string;
+        model?: string;
+        verbose?: boolean;
+      }
+    ) => {
+      try {
+        const startTime = Date.now();
+
+        if (options.verbose) {
+          console.log(chalk.blue("🎙️  Processing meeting transcript..."));
+          console.log(chalk.gray(`Input file: ${file}`));
+        }
+
+        const filePath = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
+        let transcript: string;
+        try {
+          transcript = await fs.readFile(filePath, "utf8");
+        } catch (err: unknown) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          throw new Error(`Failed to read transcript file: ${errorMessage}`);
+        }
+
+        if (!transcript.trim()) {
+          throw new Error("Transcript file is empty");
+        }
+
+        if (options.verbose) {
+          console.log(chalk.gray(`Transcript length: ${transcript.length} characters`));
+        }
+
+        const configManager = new ConfigManager();
+        let provider: AIProvider | undefined;
+        let model: string | undefined;
+
+        if (options.model) {
+          const parts = options.model.split(":");
+          if (parts.length === 2) {
+            const [p, m] = parts;
+            if (p === "openai" || p === "anthropic") {
+              provider = p;
+              model = m;
+            } else {
+              throw new Error(`Invalid provider "${p}". Must be "openai" or "anthropic".`);
+            }
+          } else {
+            throw new Error('Model format must be "provider:model" (e.g., "openai:gpt-4o")');
+          }
+        } else if (options.preset) {
+          const preset = configManager.getPreset(options.preset);
+          if (!preset) {
+            throw new Error(`Unknown preset "${options.preset}". Use "poolside config preset list" to see available presets.`);
+          }
+          provider = preset.provider;
+          model = preset.model;
+        } else {
+          const resolved = await configManager.resolveModel({});
+          provider = resolved.provider;
+          model = resolved.model;
+        }
+
+        if (options.verbose) {
+          console.log(chalk.gray(`AI Provider: ${provider}`));
+          console.log(chalk.gray(`AI Model: ${model}`));
+        }
+
+        const componentConfig = {
+          provider,
+          model,
+          verbose: options.verbose,
+        };
+
+        if (options.verbose) {
+          console.log(chalk.blue("\n📄 Stage 1: Chunking transcript..."));
+        }
+
+        const chunker = new TranscriptChunker();
+        const chunks = chunker.chunk(transcript);
+        const metadata = chunker.extractMetadata(transcript);
+
+        if (options.verbose) {
+          console.log(chalk.gray(`  Chunks created: ${chunks.length}`));
+          console.log(chalk.gray(`  Attendees detected: ${metadata.attendees.length}`));
+        }
+
+        if (options.verbose) {
+          console.log(chalk.blue("\n🔍 Stage 2: Extracting information from chunks..."));
+        }
+
+        const extractor = await MeetingExtractor.create(componentConfig);
+        const extractionResult = await extractor.extractFromChunks(chunks);
+
+        if (options.verbose) {
+          const totalDecisions = extractionResult.extractions.reduce(
+            (sum, e) => sum + e.decisions.length,
+            0
+          );
+          const totalActionItems = extractionResult.extractions.reduce(
+            (sum, e) => sum + e.actionItems.length,
+            0
+          );
+          const totalDeliverables = extractionResult.extractions.reduce(
+            (sum, e) => sum + e.deliverables.length,
+            0
+          );
+          console.log(chalk.gray(`  Raw decisions found: ${totalDecisions}`));
+          console.log(chalk.gray(`  Raw action items found: ${totalActionItems}`));
+          console.log(chalk.gray(`  Raw deliverables found: ${totalDeliverables}`));
+          console.log(chalk.gray(`  Extraction time: ${extractionResult.processingTimeMs}ms`));
+        }
+
+        if (options.verbose) {
+          console.log(chalk.blue("\n🔧 Stage 3: Refining and consolidating..."));
+        }
+
+        const refiner = await MeetingRefiner.create(componentConfig);
+        const refinementResult = await refiner.refine(extractionResult.extractions);
+
+        if (options.verbose) {
+          console.log(chalk.gray(`  Refined decisions: ${refinementResult.refined.decisions.length}`));
+          console.log(chalk.gray(`  Refined action items: ${refinementResult.refined.actionItems.length}`));
+          console.log(chalk.gray(`  Refined deliverables: ${refinementResult.refined.deliverables.length}`));
+          console.log(chalk.gray(`  Attendees identified: ${refinementResult.refined.attendees.length}`));
+          console.log(chalk.gray(`  Refinement time: ${refinementResult.processingTimeMs}ms`));
+        }
+
+        if (options.verbose) {
+          console.log(chalk.blue("\n📝 Stage 4: Generating resources..."));
+        }
+
+        const generator = await MeetingGenerator.create(componentConfig);
+        const generatorResult = await generator.generate(refinementResult.refined, {
+          generatePrd: options.prd,
+        });
+
+        if (options.verbose) {
+          console.log(chalk.gray(`  Meeting notes generated: Yes`));
+          console.log(chalk.gray(`  PRD generated: ${generatorResult.prdGenerated ? "Yes" : "No"}`));
+          console.log(chalk.gray(`  Generation time: ${generatorResult.processingTimeMs}ms`));
+        }
+
+        if (options.verbose) {
+          console.log(chalk.blue("\n✨ Stage 5: Editing pass..."));
+        }
+
+        const editor = await MeetingEditor.create(componentConfig);
+        const editorResult = await editor.edit(generatorResult.resources);
+
+        if (options.verbose) {
+          console.log(chalk.gray(`  Changes applied: ${editorResult.changesApplied.length}`));
+          for (const change of editorResult.changesApplied) {
+            console.log(chalk.gray(`    - ${change}`));
+          }
+          console.log(chalk.gray(`  Editing time: ${editorResult.processingTimeMs}ms`));
+        }
+
+        const totalTime = Date.now() - startTime;
+        const stats: ProcessingStats = {
+          totalChunks: chunks.length,
+          refinementPasses: 1,
+          processingTimeMs: totalTime,
+          decisionsFound: refinementResult.refined.decisions.length,
+          actionItemsFound: refinementResult.refined.actionItems.length,
+          deliverablesFound: refinementResult.refined.deliverables.length,
+          prdGenerated: generatorResult.prdGenerated,
+        };
+
+        const processedMeeting: ProcessedMeeting = {
+          output: editorResult.output,
+          metadata,
+          stats,
+        };
+
+        const format = options.format.toLowerCase();
+        let output: string;
+
+        if (format === "json") {
+          output = JSON.stringify(processedMeeting, null, 2);
+        } else {
+          output = editorResult.output.markdown;
+        }
+
+        if (options.output) {
+          const outputPath = path.isAbsolute(options.output)
+            ? options.output
+            : path.resolve(process.cwd(), options.output);
+          await fs.writeFile(outputPath, output, "utf8");
+          console.log(chalk.green(`\n✅ Meeting processed successfully!`));
+          console.log(chalk.gray(`Output written to: ${outputPath}`));
+        } else {
+          console.log("\n" + "─".repeat(60));
+          console.log(output);
+          console.log("─".repeat(60));
+        }
+
+        if (options.verbose || !options.output) {
+          console.log(chalk.blue("\n📊 Processing Summary"));
+          console.log(chalk.gray(`  Total chunks processed: ${stats.totalChunks}`));
+          console.log(chalk.gray(`  Decisions extracted: ${stats.decisionsFound}`));
+          console.log(chalk.gray(`  Action items extracted: ${stats.actionItemsFound}`));
+          console.log(chalk.gray(`  Deliverables extracted: ${stats.deliverablesFound}`));
+          console.log(chalk.gray(`  PRD generated: ${stats.prdGenerated ? "Yes" : "No"}`));
+          console.log(chalk.gray(`  Total processing time: ${stats.processingTimeMs}ms`));
+        }
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(chalk.red("❌ Error processing meeting:"), errorMessage);
+        process.exit(1);
+      }
+    }
+  );
 
 // Release Notes Workflow Commands
 program
