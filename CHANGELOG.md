@@ -1,5 +1,49 @@
 # poolside
 
+## 0.9.0
+
+### Minor Changes
+
+- Complete meeting transcript processing pipeline
+
+  **New Features:**
+
+  - `process-meeting <file>` command - Process meeting transcripts into structured notes and PRDs
+  - Multi-stage AI pipeline: chunking → extraction → refinement → generation → editing
+  - Automatic PRD generation when deliverables are discussed (can disable with `--no-prd`)
+  - Auto-generated output filenames based on meeting title and date
+  - Chunk-by-chunk progress reporting with visual indicators
+  - Markdown and JSON output formatters for meeting artifacts
+
+  **Meeting Pipeline Architecture:**
+
+  - `TranscriptChunker` - Intelligently splits transcripts preserving speaker boundaries
+  - `MeetingExtractor` - Extracts decisions, action items, and deliverables with contextual continuity
+  - `MeetingRefiner` - Consolidates and deduplicates extracted data in a single pass
+  - `MeetingGenerator` - Creates polished meeting notes and PRD documents
+  - `MeetingEditor` - Final polish pass for professional-quality output
+
+  **Error Handling & Validation:**
+
+  - Custom error classes with actionable suggestions (`MeetingPipelineError`, `TranscriptError`)
+  - Model validator with compatibility checking for OpenAI and Anthropic models
+  - Temperature warnings for reasoning models
+  - Graceful handling of API failures with detailed error messages
+
+  **Developer Experience:**
+
+  - 7000+ lines of new code with comprehensive test coverage
+  - E2E test suite for complete pipeline validation
+  - Unit tests for all meeting modules (schemas, extractor, refiner, generator, editor, formatters, progress, errors)
+  - Model validator tests for configuration edge cases
+
+  **Other Improvements:**
+
+  - Default OpenAI model updated to gpt-5.2
+  - Date formatting uses dashes instead of slashes in output filenames
+  - Test coverage analysis step added to commit workflow
+  - Zod schemas for structured meeting data with full TypeScript types
+
 ## 0.8.0
 
 ### Minor Changes
