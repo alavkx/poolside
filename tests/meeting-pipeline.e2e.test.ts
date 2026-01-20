@@ -333,6 +333,35 @@ const mockEditedPRD: PRDDocument = {
 	],
 };
 
+function createResponsesResponse(data: unknown, inputTokens = 500, outputTokens = 400) {
+	return HttpResponse.json({
+		id: "resp-test",
+		object: "response",
+		created_at: Date.now(),
+		status: "completed",
+		output: [
+			{
+				type: "message",
+				id: "msg-test",
+				status: "completed",
+				role: "assistant",
+				content: [
+					{
+						type: "output_text",
+						text: JSON.stringify(data),
+						annotations: [],
+					},
+				],
+			},
+		],
+		usage: {
+			input_tokens: inputTokens,
+			output_tokens: outputTokens,
+			total_tokens: inputTokens + outputTokens,
+		},
+	});
+}
+
 describe("Meeting Transcript Pipeline E2E", () => {
 	let extractionCallCount = 0;
 
@@ -342,149 +371,38 @@ describe("Meeting Transcript Pipeline E2E", () => {
 		vi.stubEnv("OPENAI_API_KEY", "test-api-key");
 
 		server.use(
-			http.post("https://api.openai.com/v1/chat/completions", async ({ request }) => {
-				const body = await request.json() as { messages?: Array<{ content?: string }> };
-				const systemPrompt = body.messages?.[0]?.content || "";
+			http.post("https://api.openai.com/v1/responses", async ({ request }) => {
+				const body = await request.json() as { input?: Array<{ role?: string; content?: string }> };
+				const systemPrompt = body.input?.[0]?.content || "";
 
 				if (systemPrompt.includes("expert meeting analyst") && systemPrompt.includes("extract structured information")) {
 					extractionCallCount++;
 					const mockData = extractionCallCount === 1 ? mockChunkExtraction1 : mockChunkExtraction2;
-					return HttpResponse.json({
-						id: `chatcmpl-extract-${extractionCallCount}`,
-						object: "chat.completion",
-						created: Date.now(),
-						model: "gpt-5.2",
-						choices: [
-							{
-								index: 0,
-								message: {
-									role: "assistant",
-									content: null,
-									tool_calls: [
-										{
-											id: `call_extract_${extractionCallCount}`,
-											type: "function",
-											function: {
-												name: "json",
-												arguments: JSON.stringify(mockData),
-											},
-										},
-									],
-								},
-								finish_reason: "tool_calls",
-							},
-						],
-						usage: { prompt_tokens: 500, completion_tokens: 400, total_tokens: 900 },
-					});
+					return createResponsesResponse(mockData, 500, 400);
 				}
 
 				if (systemPrompt.includes("consolidating and refining meeting notes")) {
-					return HttpResponse.json({
-						id: "chatcmpl-refine",
-						object: "chat.completion",
-						created: Date.now(),
-						model: "gpt-5.2",
-						choices: [
-							{
-								index: 0,
-								message: {
-									role: "assistant",
-									content: null,
-									tool_calls: [
-										{
-											id: "call_refine",
-											type: "function",
-											function: {
-												name: "json",
-												arguments: JSON.stringify(mockRefinedMeeting),
-											},
-										},
-									],
-								},
-								finish_reason: "tool_calls",
-							},
-						],
-						usage: { prompt_tokens: 1200, completion_tokens: 800, total_tokens: 2000 },
-					});
+					return createResponsesResponse(mockRefinedMeeting, 1200, 800);
 				}
 
 				if (systemPrompt.includes("product manager creating a concise Product Requirements Document")) {
-					return HttpResponse.json({
-						id: "chatcmpl-prd",
-						object: "chat.completion",
-						created: Date.now(),
-						model: "gpt-5.2",
-						choices: [
-							{
-								index: 0,
-								message: {
-									role: "assistant",
-									content: null,
-									tool_calls: [
-										{
-											id: "call_prd",
-											type: "function",
-											function: {
-												name: "json",
-												arguments: JSON.stringify(mockPRD),
-											},
-										},
-									],
-								},
-								finish_reason: "tool_calls",
-							},
-						],
-						usage: { prompt_tokens: 600, completion_tokens: 500, total_tokens: 1100 },
-					});
+					return createResponsesResponse(mockPRD, 600, 500);
 				}
 
 				if (systemPrompt.includes("expert editor specializing in meeting documentation")) {
-					return HttpResponse.json({
-						id: "chatcmpl-edit",
-						object: "chat.completion",
-						created: Date.now(),
-						model: "gpt-5.2",
-						choices: [
-							{
-								index: 0,
-								message: {
-									role: "assistant",
-									content: null,
-									tool_calls: [
-										{
-											id: "call_edit",
-											type: "function",
-											function: {
-												name: "json",
-												arguments: JSON.stringify({
-													notes: mockEditedNotes,
-													prd: mockEditedPRD,
-													changesApplied: [
-														"Standardized date format to 'January 15, 2026'",
-														"Added meeting title with feature name for clarity",
-														"Linked action items to related decisions",
-														"Consolidated duplicate open questions between notes and PRD",
-													],
-												}),
-											},
-										},
-									],
-								},
-								finish_reason: "tool_calls",
-							},
+					return createResponsesResponse({
+						notes: mockEditedNotes,
+						prd: mockEditedPRD,
+						changesApplied: [
+							"Standardized date format to 'January 15, 2026'",
+							"Added meeting title with feature name for clarity",
+							"Linked action items to related decisions",
+							"Consolidated duplicate open questions between notes and PRD",
 						],
-						usage: { prompt_tokens: 1500, completion_tokens: 1200, total_tokens: 2700 },
-					});
+					}, 1500, 1200);
 				}
 
-				return HttpResponse.json({
-					id: "chatcmpl-fallback",
-					object: "chat.completion",
-					created: Date.now(),
-					model: "gpt-5.2",
-					choices: [{ index: 0, message: { role: "assistant", content: "OK" }, finish_reason: "stop" }],
-					usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-				});
+				return createResponsesResponse({ message: "OK" }, 10, 5);
 			})
 		);
 	});
@@ -651,68 +569,19 @@ Sarah: Thanks everyone. Let's sync again Monday.
 		};
 
 		server.use(
-			http.post("https://api.openai.com/v1/chat/completions", async ({ request }) => {
-				const body = await request.json() as { messages?: Array<{ content?: string }> };
-				const systemPrompt = body.messages?.[0]?.content || "";
+			http.post("https://api.openai.com/v1/responses", async ({ request }) => {
+				const body = await request.json() as { input?: Array<{ role?: string; content?: string }> };
+				const systemPrompt = body.input?.[0]?.content || "";
 
 				if (systemPrompt.includes("extract structured information")) {
-					return HttpResponse.json({
-						id: "chatcmpl-simple-extract",
-						object: "chat.completion",
-						created: Date.now(),
-						model: "gpt-5.2",
-						choices: [
-							{
-								index: 0,
-								message: {
-									role: "assistant",
-									content: null,
-									tool_calls: [
-										{
-											id: "call_simple_extract",
-											type: "function",
-											function: { name: "json", arguments: JSON.stringify(mockSimpleExtraction) },
-										},
-									],
-								},
-								finish_reason: "tool_calls",
-							},
-						],
-						usage: { prompt_tokens: 200, completion_tokens: 150, total_tokens: 350 },
-					});
+					return createResponsesResponse(mockSimpleExtraction, 200, 150);
 				}
 
 				if (systemPrompt.includes("consolidating and refining")) {
-					return HttpResponse.json({
-						id: "chatcmpl-simple-refine",
-						object: "chat.completion",
-						created: Date.now(),
-						model: "gpt-5.2",
-						choices: [
-							{
-								index: 0,
-								message: {
-									role: "assistant",
-									content: null,
-									tool_calls: [
-										{
-											id: "call_simple_refine",
-											type: "function",
-											function: { name: "json", arguments: JSON.stringify(mockSimpleRefined) },
-										},
-									],
-								},
-								finish_reason: "tool_calls",
-							},
-						],
-						usage: { prompt_tokens: 400, completion_tokens: 300, total_tokens: 700 },
-					});
+					return createResponsesResponse(mockSimpleRefined, 400, 300);
 				}
 
-				return HttpResponse.json({
-					id: "chatcmpl-fallback",
-					choices: [{ index: 0, message: { role: "assistant", content: "OK" }, finish_reason: "stop" }],
-				});
+				return createResponsesResponse({ message: "OK" }, 10, 5);
 			})
 		);
 

@@ -600,7 +600,7 @@ export class AIProcessor {
         model: this.model,
         prompt,
         temperature: 0.3,
-        maxTokens: this.config.maxTokens,
+        maxOutputTokens: this.config.maxTokens,
         abortSignal: abortController.signal,
       });
 
@@ -619,11 +619,11 @@ export class AIProcessor {
 
         if (usage) {
           console.log(chalk.gray("  Token usage:"));
-          if (usage.promptTokens)
-            console.log(chalk.gray(`    Prompt tokens: ${usage.promptTokens}`));
-          if (usage.completionTokens)
+          if (usage.inputTokens)
+            console.log(chalk.gray(`    Prompt tokens: ${usage.inputTokens}`));
+          if (usage.outputTokens)
             console.log(
-              chalk.gray(`    Completion tokens: ${usage.completionTokens}`)
+              chalk.gray(`    Completion tokens: ${usage.outputTokens}`)
             );
           if (usage.totalTokens)
             console.log(chalk.gray(`    Total tokens: ${usage.totalTokens}`));
@@ -925,8 +925,8 @@ Release note entries:`;
       const { text, usage } = await generateText({
         model: this.model,
         prompt,
-        temperature: 0.05, // Very low temperature for maximum factual accuracy
-        maxTokens: this.config.editorMaxTokens,
+        temperature: 0.05,
+        maxOutputTokens: this.config.editorMaxTokens,
         abortSignal: abortController.signal,
       });
 
@@ -939,11 +939,11 @@ Release note entries:`;
 
         if (usage) {
           console.log(chalk.gray("  Token usage:"));
-          if (usage.promptTokens)
-            console.log(chalk.gray(`    Prompt tokens: ${usage.promptTokens}`));
-          if (usage.completionTokens)
+          if (usage.inputTokens)
+            console.log(chalk.gray(`    Prompt tokens: ${usage.inputTokens}`));
+          if (usage.outputTokens)
             console.log(
-              chalk.gray(`    Completion tokens: ${usage.completionTokens}`)
+              chalk.gray(`    Completion tokens: ${usage.outputTokens}`)
             );
           if (usage.totalTokens)
             console.log(chalk.gray(`    Total tokens: ${usage.totalTokens}`));

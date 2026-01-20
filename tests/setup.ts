@@ -94,7 +94,7 @@ const handlers = [
     });
   }),
 
-  // OpenAI API - chat completions
+  // OpenAI API - chat completions (legacy)
   http.post("https://api.openai.com/v1/chat/completions", () => {
     return HttpResponse.json({
       choices: [
@@ -107,6 +107,36 @@ const handlers = [
           finish_reason: "stop",
         },
       ],
+    });
+  }),
+
+  // OpenAI API - responses (AI SDK v6+ new format)
+  http.post("https://api.openai.com/v1/responses", () => {
+    return HttpResponse.json({
+      id: "resp-test",
+      object: "response",
+      created_at: Date.now(),
+      status: "completed",
+      output: [
+        {
+          type: "message",
+          id: "msg-test",
+          status: "completed",
+          role: "assistant",
+          content: [
+            {
+              type: "output_text",
+              text: "- Enhanced user authentication system\n- Improved security features",
+              annotations: [],
+            },
+          ],
+        },
+      ],
+      usage: {
+        input_tokens: 100,
+        output_tokens: 50,
+        total_tokens: 150,
+      },
     });
   }),
 ];

@@ -597,7 +597,7 @@ export async function generateReleaseNotes(
     aiConfig: {
       maxTokens: 4000,
       batchSize: 5,
-      model: "gpt-4o-mini",
+      model: "gpt-5.2",
       enableEditorPersona: false,
       editorMaxTokens: 2000,
     },

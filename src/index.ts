@@ -888,7 +888,7 @@ program
           aiConfig: {
             maxTokens: 4000,
             batchSize: 5,
-            model: "gpt-4o-mini",
+            model: "gpt-5.2",
           },
           repositories: [
             {

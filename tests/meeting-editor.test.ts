@@ -186,35 +186,30 @@ describe("MeetingEditor", () => {
 		vi.stubEnv("OPENAI_API_KEY", "test-api-key");
 
 		server.use(
-			http.post("https://api.openai.com/v1/chat/completions", () => {
+			http.post("https://api.openai.com/v1/responses", () => {
 				return HttpResponse.json({
-					id: "chatcmpl-test",
-					object: "chat.completion",
-					created: Date.now(),
-					model: "gpt-5.2",
-					choices: [
+					id: "resp-test",
+					object: "response",
+					created_at: Date.now(),
+					status: "completed",
+					output: [
 						{
-							index: 0,
-							message: {
-								role: "assistant",
-								content: null,
-								tool_calls: [
-									{
-										id: "call_test123",
-										type: "function",
-										function: {
-											name: "json",
-											arguments: JSON.stringify(mockEditedResponse),
-										},
-									},
-								],
-							},
-							finish_reason: "tool_calls",
+							type: "message",
+							id: "msg-test",
+							status: "completed",
+							role: "assistant",
+							content: [
+								{
+									type: "output_text",
+									text: JSON.stringify(mockEditedResponse),
+									annotations: [],
+								},
+							],
 						},
 					],
 					usage: {
-						prompt_tokens: 1000,
-						completion_tokens: 800,
+						input_tokens: 1000,
+						output_tokens: 800,
 						total_tokens: 1800,
 					},
 				});

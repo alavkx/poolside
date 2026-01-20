@@ -24,10 +24,10 @@
     "poolside": "./dist/index.js"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^0.0.55",
-    "@ai-sdk/openai": "^0.0.66",
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
     "@octokit/rest": "^20.0.2",
-    "ai": "^3.4.33",
+    "ai": "^6.0.0",
     "axios": "^1.6.0",
     "chalk": "^5.3.0",
     "commander": "^11.1.0",

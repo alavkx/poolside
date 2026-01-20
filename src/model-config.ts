@@ -53,7 +53,7 @@ export const BUILT_IN_PRESETS: Record<string, ModelPreset> = {
   fast: {
     name: "fast",
     provider: "openai",
-    model: "gpt-4o-mini",
+    model: "gpt-5.2",
     description: "Quick tasks, lower cost",
   },
   quality: {

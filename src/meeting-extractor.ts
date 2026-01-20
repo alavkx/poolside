@@ -226,13 +226,14 @@ export class MeetingExtractor {
 			this.debugLog(`Sending extraction request...`);
 			this.debugLog(`Prompt length: ${prompt.length} characters`);
 
+			// @ts-expect-error AI SDK v6 + Zod 3.25.x type inference issue
 			const { object, usage } = await generateObject({
 				model: this.model,
 				schema: ChunkExtractionSchema,
 				system: EXTRACTION_SYSTEM_PROMPT,
 				prompt,
 				temperature: 0.1,
-				maxTokens: this.config.maxTokens,
+				maxOutputTokens: this.config.maxTokens,
 				abortSignal: abortController.signal,
 			});
 
@@ -240,7 +241,7 @@ export class MeetingExtractor {
 
 			this.debugLog(`Response received in ${duration}ms`);
 			if (usage) {
-				this.debugLog(`Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`);
+				this.debugLog(`Tokens - prompt: ${usage.inputTokens}, completion: ${usage.outputTokens}`);
 			}
 
 			return object;

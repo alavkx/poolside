@@ -769,7 +769,7 @@ Make it actionable for a coding agent to implement.`;
         model: this.aiProcessor.model,
         prompt,
         temperature: 0.3,
-        maxTokens: 2000,
+        maxOutputTokens: 2000,
       });
 
       spinner.succeed("Coding prompt generated");

@@ -277,19 +277,20 @@ export class MeetingGenerator {
 			this.debugLog(`Sending PRD generation request`);
 			this.debugLog(`Prompt length: ${prompt.length} characters`);
 
+			// @ts-expect-error AI SDK v6 + Zod 3.25.x type inference issue
 			const { object, usage } = await generateObject({
 				model: this.model,
 				schema: PRDSchema,
 				system: PRD_GENERATION_SYSTEM_PROMPT,
 				prompt,
 				temperature: 0.2,
-				maxTokens: this.config.maxTokens,
+				maxOutputTokens: this.config.maxTokens,
 				abortSignal: abortController.signal,
 			});
 
 			this.debugLog(`PRD generation completed`);
 			if (usage) {
-				this.debugLog(`Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`);
+				this.debugLog(`Tokens - prompt: ${usage.inputTokens}, completion: ${usage.outputTokens}`);
 			}
 			this.debugLog(`Requirements generated: ${object.requirements.length}`);
 

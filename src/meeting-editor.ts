@@ -260,13 +260,14 @@ export class MeetingEditor {
 			this.debugLog(`Sending editing request...`);
 			this.debugLog(`Prompt length: ${prompt.length} characters`);
 
+			// @ts-expect-error AI SDK v6 + Zod 3.25.x type inference issue
 			const { object, usage } = await generateObject({
 				model: this.model,
 				schema: EditingResultSchema,
 				system: EDITING_SYSTEM_PROMPT,
 				prompt,
 				temperature: 0.1,
-				maxTokens: this.config.maxTokens,
+				maxOutputTokens: this.config.maxTokens,
 				abortSignal: abortController.signal,
 			});
 
@@ -274,7 +275,7 @@ export class MeetingEditor {
 
 			this.debugLog(`Editing response received in ${processingTimeMs}ms`);
 			if (usage) {
-				this.debugLog(`Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`);
+				this.debugLog(`Tokens - prompt: ${usage.inputTokens}, completion: ${usage.outputTokens}`);
 			}
 			this.debugLog(`Changes applied: ${object.changesApplied.length}`);
 			for (const change of object.changesApplied) {

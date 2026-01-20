@@ -611,7 +611,7 @@ export async function generateDiffSummary(
       model: aiProcessor.model,
       prompt,
       temperature: 0.2,
-      maxTokens: 4000,
+      maxOutputTokens: 4000,
     });
 
     if (options.verbose) {
