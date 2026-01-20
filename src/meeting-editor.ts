@@ -14,6 +14,8 @@ import {
 	type ResolvedModel,
 	ConfigManager,
 } from "./model-config.js";
+import type { PipelineProgress } from "./meeting-progress.js";
+import { wrapError } from "./meeting-errors.js";
 
 export interface EditorConfig {
 	provider?: AIProvider;
@@ -21,6 +23,7 @@ export interface EditorConfig {
 	maxTokens?: number;
 	verbose?: boolean;
 	resolvedModel?: ResolvedModel;
+	progress?: PipelineProgress;
 }
 
 export interface EditorResult {
@@ -133,11 +136,12 @@ Track all changes you make in the changesApplied array.`;
 
 export class MeetingEditor {
 	private verbose: boolean;
-	private config: Required<Omit<EditorConfig, "resolvedModel">> & {
+	private config: Required<Omit<EditorConfig, "resolvedModel" | "progress">> & {
 		resolvedModel?: ResolvedModel;
 	};
 	private model: Parameters<typeof generateObject>[0]["model"];
 	private requestTimeoutMs: number;
+	private progress?: PipelineProgress;
 
 	static async create(config: EditorConfig = {}): Promise<MeetingEditor> {
 		const configManager = new ConfigManager();
@@ -197,6 +201,7 @@ export class MeetingEditor {
 		};
 
 		this.verbose = this.config.verbose;
+		this.progress = config.progress;
 
 		const configManager = new ConfigManager();
 		const timeoutEnv = process.env.POOLSIDE_AI_REQUEST_TIMEOUT_MS;
@@ -212,13 +217,17 @@ export class MeetingEditor {
 				? anthropic(this.config.model)
 				: openai(this.config.model);
 
-		if (this.verbose) {
-			console.log(chalk.gray("🔧 [VERBOSE] Meeting Editor initialized"));
-			console.log(chalk.gray(`🔧 [VERBOSE] Provider: ${this.config.provider}`));
-			console.log(chalk.gray(`🔧 [VERBOSE] Model: ${this.config.model}`));
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Max Tokens: ${this.config.maxTokens}`)
-			);
+		this.debugLog(`Meeting Editor initialized`);
+		this.debugLog(`Provider: ${this.config.provider}`);
+		this.debugLog(`Model: ${this.config.model}`);
+		this.debugLog(`Max Tokens: ${this.config.maxTokens}`);
+	}
+
+	private debugLog(message: string): void {
+		if (this.progress) {
+			this.progress.debug(message);
+		} else if (this.verbose) {
+			console.log(chalk.gray(`🔧 [VERBOSE] ${message}`));
 		}
 	}
 
@@ -234,21 +243,11 @@ export class MeetingEditor {
 	async edit(resources: MeetingResources): Promise<EditorResult> {
 		const startTime = Date.now();
 
-		if (this.verbose) {
-			console.log(chalk.gray("\n🔧 [VERBOSE] Starting editing pass"));
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Notes title: ${resources.notes.title}`)
-			);
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Decisions: ${resources.notes.decisions.length}`)
-			);
-			console.log(
-				chalk.gray(
-					`🔧 [VERBOSE] Action items: ${resources.notes.actionItems.length}`
-				)
-			);
-			console.log(chalk.gray(`🔧 [VERBOSE] PRD present: ${!!resources.prd}`));
-		}
+		this.debugLog(`Starting editing pass`);
+		this.debugLog(`Notes title: ${resources.notes.title}`);
+		this.debugLog(`Decisions: ${resources.notes.decisions.length}`);
+		this.debugLog(`Action items: ${resources.notes.actionItems.length}`);
+		this.debugLog(`PRD present: ${!!resources.prd}`);
 
 		const prompt = this.buildEditingPrompt(resources);
 
@@ -258,12 +257,8 @@ export class MeetingEditor {
 		}, this.requestTimeoutMs);
 
 		try {
-			if (this.verbose) {
-				console.log(chalk.gray("🔧 [VERBOSE] Sending editing request..."));
-				console.log(
-					chalk.gray(`🔧 [VERBOSE] Prompt length: ${prompt.length} characters`)
-				);
-			}
+			this.debugLog(`Sending editing request...`);
+			this.debugLog(`Prompt length: ${prompt.length} characters`);
 
 			const { object, usage } = await generateObject({
 				model: this.model,
@@ -277,24 +272,13 @@ export class MeetingEditor {
 
 			const processingTimeMs = Date.now() - startTime;
 
-			if (this.verbose) {
-				console.log(chalk.gray("🔧 [VERBOSE] Editing response received"));
-				console.log(chalk.gray(`🔧 [VERBOSE] Duration: ${processingTimeMs}ms`));
-				if (usage) {
-					console.log(
-						chalk.gray(
-							`🔧 [VERBOSE] Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`
-						)
-					);
-				}
-				console.log(
-					chalk.gray(
-						`🔧 [VERBOSE] Changes applied: ${object.changesApplied.length}`
-					)
-				);
-				for (const change of object.changesApplied) {
-					console.log(chalk.gray(`🔧 [VERBOSE]   - ${change}`));
-				}
+			this.debugLog(`Editing response received in ${processingTimeMs}ms`);
+			if (usage) {
+				this.debugLog(`Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`);
+			}
+			this.debugLog(`Changes applied: ${object.changesApplied.length}`);
+			for (const change of object.changesApplied) {
+				this.debugLog(`  - ${change}`);
 			}
 
 			const editedNotes = this.mapToMeetingNotes(object.notes);
@@ -315,25 +299,19 @@ export class MeetingEditor {
 			};
 		} catch (error: unknown) {
 			const duration = Date.now() - startTime;
+			const errorMessage = error instanceof Error ? error.message : String(error);
 
-			if (this.verbose) {
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
-				console.log(chalk.red(`🔧 [VERBOSE] Editing failed: ${errorMessage}`));
-				console.log(
-					chalk.red(`🔧 [VERBOSE] Duration before error: ${duration}ms`)
-				);
+			this.debugLog(`Editing failed: ${errorMessage}`);
+			this.debugLog(`Duration before error: ${duration}ms`);
 
-				if (error instanceof Error && error.name === "AbortError") {
-					console.log(
-						chalk.red(
-							`🔧 [VERBOSE] Request aborted due to timeout after ${this.requestTimeoutMs}ms`
-						)
-					);
-				}
+			if (error instanceof Error && error.name === "AbortError") {
+				this.debugLog(`Request aborted due to timeout after ${this.requestTimeoutMs}ms`);
 			}
 
-			throw error;
+			throw wrapError(error, "editing", {
+				model: this.config.model,
+				provider: this.config.provider,
+			});
 		} finally {
 			clearTimeout(timeoutId);
 		}

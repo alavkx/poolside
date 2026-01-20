@@ -12,6 +12,8 @@ import {
 	type ResolvedModel,
 	ConfigManager,
 } from "./model-config.js";
+import type { PipelineProgress } from "./meeting-progress.js";
+import { wrapError } from "./meeting-errors.js";
 
 export interface RefinerConfig {
 	provider?: AIProvider;
@@ -19,6 +21,7 @@ export interface RefinerConfig {
 	maxTokens?: number;
 	verbose?: boolean;
 	resolvedModel?: ResolvedModel;
+	progress?: PipelineProgress;
 }
 
 export interface RefinementResult {
@@ -69,11 +72,12 @@ CRITICAL REQUIREMENTS:
 
 export class MeetingRefiner {
 	private verbose: boolean;
-	private config: Required<Omit<RefinerConfig, "resolvedModel">> & {
+	private config: Required<Omit<RefinerConfig, "resolvedModel" | "progress">> & {
 		resolvedModel?: ResolvedModel;
 	};
 	private model: Parameters<typeof generateObject>[0]["model"];
 	private requestTimeoutMs: number;
+	private progress?: PipelineProgress;
 
 	static async create(config: RefinerConfig = {}): Promise<MeetingRefiner> {
 		const configManager = new ConfigManager();
@@ -133,6 +137,7 @@ export class MeetingRefiner {
 		};
 
 		this.verbose = this.config.verbose;
+		this.progress = config.progress;
 
 		const configManager = new ConfigManager();
 		const timeoutEnv = process.env.POOLSIDE_AI_REQUEST_TIMEOUT_MS;
@@ -148,13 +153,17 @@ export class MeetingRefiner {
 				? anthropic(this.config.model)
 				: openai(this.config.model);
 
-		if (this.verbose) {
-			console.log(chalk.gray("🔧 [VERBOSE] Meeting Refiner initialized"));
-			console.log(chalk.gray(`🔧 [VERBOSE] Provider: ${this.config.provider}`));
-			console.log(chalk.gray(`🔧 [VERBOSE] Model: ${this.config.model}`));
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Max Tokens: ${this.config.maxTokens}`)
-			);
+		this.debugLog(`Meeting Refiner initialized`);
+		this.debugLog(`Provider: ${this.config.provider}`);
+		this.debugLog(`Model: ${this.config.model}`);
+		this.debugLog(`Max Tokens: ${this.config.maxTokens}`);
+	}
+
+	private debugLog(message: string): void {
+		if (this.progress) {
+			this.progress.debug(message);
+		} else if (this.verbose) {
+			console.log(chalk.gray(`🔧 [VERBOSE] ${message}`));
 		}
 	}
 
@@ -170,12 +179,8 @@ export class MeetingRefiner {
 	async refine(extractions: ChunkExtraction[]): Promise<RefinementResult> {
 		const startTime = Date.now();
 
-		if (this.verbose) {
-			console.log(
-				chalk.gray(`\n🔧 [VERBOSE] Starting refinement for ${extractions.length} extractions`)
-			);
-			this.logExtractionStats(extractions);
-		}
+		this.debugLog(`Starting refinement for ${extractions.length} extractions`);
+		this.logExtractionStats(extractions);
 
 		if (extractions.length === 0) {
 			return {
@@ -193,12 +198,8 @@ export class MeetingRefiner {
 		}, this.requestTimeoutMs);
 
 		try {
-			if (this.verbose) {
-				console.log(chalk.gray("🔧 [VERBOSE] Sending refinement request..."));
-				console.log(
-					chalk.gray(`🔧 [VERBOSE] Prompt length: ${prompt.length} characters`)
-				);
-			}
+			this.debugLog(`Sending refinement request...`);
+			this.debugLog(`Prompt length: ${prompt.length} characters`);
 
 			const { object, usage } = await generateObject({
 				model: this.model,
@@ -212,18 +213,11 @@ export class MeetingRefiner {
 
 			const processingTimeMs = Date.now() - startTime;
 
-			if (this.verbose) {
-				console.log(chalk.gray("🔧 [VERBOSE] Refinement response received"));
-				console.log(chalk.gray(`🔧 [VERBOSE] Duration: ${processingTimeMs}ms`));
-				if (usage) {
-					console.log(
-						chalk.gray(
-							`🔧 [VERBOSE] Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`
-						)
-					);
-				}
-				this.logRefinementResults(object);
+			this.debugLog(`Refinement response received in ${processingTimeMs}ms`);
+			if (usage) {
+				this.debugLog(`Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`);
 			}
+			this.logRefinementResults(object);
 
 			return {
 				refined: object,
@@ -232,23 +226,19 @@ export class MeetingRefiner {
 			};
 		} catch (error: unknown) {
 			const duration = Date.now() - startTime;
+			const errorMessage = error instanceof Error ? error.message : String(error);
 
-			if (this.verbose) {
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
-				console.log(chalk.red(`🔧 [VERBOSE] Refinement failed: ${errorMessage}`));
-				console.log(chalk.red(`🔧 [VERBOSE] Duration before error: ${duration}ms`));
+			this.debugLog(`Refinement failed: ${errorMessage}`);
+			this.debugLog(`Duration before error: ${duration}ms`);
 
-				if (error instanceof Error && error.name === "AbortError") {
-					console.log(
-						chalk.red(
-							`🔧 [VERBOSE] Request aborted due to timeout after ${this.requestTimeoutMs}ms`
-						)
-					);
-				}
+			if (error instanceof Error && error.name === "AbortError") {
+				this.debugLog(`Request aborted due to timeout after ${this.requestTimeoutMs}ms`);
 			}
 
-			throw error;
+			throw wrapError(error, "refinement", {
+				model: this.config.model,
+				provider: this.config.provider,
+			});
 		} finally {
 			clearTimeout(timeoutId);
 		}
@@ -363,20 +353,20 @@ export class MeetingRefiner {
 			{ decisions: 0, actionItems: 0, deliverables: 0, keyPoints: 0 }
 		);
 
-		console.log(chalk.gray(`🔧 [VERBOSE] Input stats:`));
-		console.log(chalk.gray(`  Raw decisions: ${stats.decisions}`));
-		console.log(chalk.gray(`  Raw action items: ${stats.actionItems}`));
-		console.log(chalk.gray(`  Raw deliverables: ${stats.deliverables}`));
-		console.log(chalk.gray(`  Raw key points: ${stats.keyPoints}`));
+		this.debugLog(`Input stats:`);
+		this.debugLog(`  Raw decisions: ${stats.decisions}`);
+		this.debugLog(`  Raw action items: ${stats.actionItems}`);
+		this.debugLog(`  Raw deliverables: ${stats.deliverables}`);
+		this.debugLog(`  Raw key points: ${stats.keyPoints}`);
 	}
 
 	private logRefinementResults(refined: RefinedMeeting): void {
-		console.log(chalk.gray(`🔧 [VERBOSE] Refinement results:`));
-		console.log(chalk.gray(`  Decisions: ${refined.decisions.length}`));
-		console.log(chalk.gray(`  Action items: ${refined.actionItems.length}`));
-		console.log(chalk.gray(`  Deliverables: ${refined.deliverables.length}`));
-		console.log(chalk.gray(`  Attendees: ${refined.attendees.length}`));
-		console.log(chalk.gray(`  Open questions: ${refined.openQuestions.length}`));
+		this.debugLog(`Refinement results:`);
+		this.debugLog(`  Decisions: ${refined.decisions.length}`);
+		this.debugLog(`  Action items: ${refined.actionItems.length}`);
+		this.debugLog(`  Deliverables: ${refined.deliverables.length}`);
+		this.debugLog(`  Attendees: ${refined.attendees.length}`);
+		this.debugLog(`  Open questions: ${refined.openQuestions.length}`);
 	}
 
 	getConfig(): Omit<RefinerConfig, "resolvedModel"> {

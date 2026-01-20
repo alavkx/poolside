@@ -12,6 +12,8 @@ import {
 	type ResolvedModel,
 	ConfigManager,
 } from "./model-config.js";
+import type { PipelineProgress } from "./meeting-progress.js";
+import { wrapError } from "./meeting-errors.js";
 
 export interface ExtractorConfig {
 	provider?: AIProvider;
@@ -19,6 +21,7 @@ export interface ExtractorConfig {
 	maxTokens?: number;
 	verbose?: boolean;
 	resolvedModel?: ResolvedModel;
+	progress?: PipelineProgress;
 }
 
 export interface ExtractionResult {
@@ -45,11 +48,12 @@ CRITICAL REQUIREMENTS:
 
 export class MeetingExtractor {
 	private verbose: boolean;
-	private config: Required<Omit<ExtractorConfig, "resolvedModel">> & {
+	private config: Required<Omit<ExtractorConfig, "resolvedModel" | "progress">> & {
 		resolvedModel?: ResolvedModel;
 	};
 	private model: Parameters<typeof generateObject>[0]["model"];
 	private requestTimeoutMs: number;
+	private progress?: PipelineProgress;
 
 	static async create(config: ExtractorConfig = {}): Promise<MeetingExtractor> {
 		const configManager = new ConfigManager();
@@ -109,6 +113,7 @@ export class MeetingExtractor {
 		};
 
 		this.verbose = this.config.verbose;
+		this.progress = config.progress;
 
 		const configManager = new ConfigManager();
 		const timeoutEnv = process.env.POOLSIDE_AI_REQUEST_TIMEOUT_MS;
@@ -124,13 +129,17 @@ export class MeetingExtractor {
 				? anthropic(this.config.model)
 				: openai(this.config.model);
 
-		if (this.verbose) {
-			console.log(chalk.gray("🔧 [VERBOSE] Meeting Extractor initialized"));
-			console.log(chalk.gray(`🔧 [VERBOSE] Provider: ${this.config.provider}`));
-			console.log(chalk.gray(`🔧 [VERBOSE] Model: ${this.config.model}`));
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Max Tokens: ${this.config.maxTokens}`)
-			);
+		this.debugLog(`Meeting Extractor initialized`);
+		this.debugLog(`Provider: ${this.config.provider}`);
+		this.debugLog(`Model: ${this.config.model}`);
+		this.debugLog(`Max Tokens: ${this.config.maxTokens}`);
+	}
+
+	private debugLog(message: string): void {
+		if (this.progress) {
+			this.progress.debug(message);
+		} else if (this.verbose) {
+			console.log(chalk.gray(`🔧 [VERBOSE] ${message}`));
 		}
 	}
 
@@ -148,58 +157,36 @@ export class MeetingExtractor {
 		const extractions: ChunkExtraction[] = [];
 		let runningSummary = "";
 
-		if (this.verbose) {
-			console.log(
-				chalk.gray(`\n🔧 [VERBOSE] Starting extraction for ${chunks.length} chunks`)
-			);
-		}
+		this.debugLog(`Starting extraction for ${chunks.length} chunks`);
 
 		for (let i = 0; i < chunks.length; i++) {
 			const chunk = chunks[i];
 
-			if (this.verbose) {
-				console.log(
-					chalk.gray(
-						`\n🔧 [VERBOSE] Processing chunk ${i + 1}/${chunks.length}`
-					)
-				);
-				console.log(
-					chalk.gray(
-						`🔧 [VERBOSE] Chunk size: ${chunk.content.length} characters`
-					)
-				);
-				console.log(
-					chalk.gray(
-						`🔧 [VERBOSE] Speakers: ${chunk.speakersPresent.join(", ") || "unknown"}`
-					)
-				);
-				if (runningSummary) {
-					console.log(
-						chalk.gray(
-							`🔧 [VERBOSE] Context from previous: ${runningSummary.slice(0, 100)}...`
-						)
-					);
-				}
+			this.progress?.updateWithCount(i + 1, chunks.length, `Extracting from chunk`);
+			this.debugLog(`Processing chunk ${i + 1}/${chunks.length}`);
+			this.debugLog(`Chunk size: ${chunk.content.length} characters`);
+			this.debugLog(`Speakers: ${chunk.speakersPresent.join(", ") || "unknown"}`);
+			if (runningSummary) {
+				this.debugLog(`Context from previous: ${runningSummary.slice(0, 100)}...`);
 			}
 
-			const extraction = await this.extractFromChunk(chunk, runningSummary);
-			extractions.push(extraction);
-			runningSummary = extraction.summaryForNextChunk;
+			try {
+				const extraction = await this.extractFromChunk(chunk, runningSummary);
+				extractions.push(extraction);
+				runningSummary = extraction.summaryForNextChunk;
 
-			if (this.verbose) {
-				console.log(chalk.gray(`🔧 [VERBOSE] Chunk ${i + 1} results:`));
-				console.log(
-					chalk.gray(`  Decisions: ${extraction.decisions.length}`)
-				);
-				console.log(
-					chalk.gray(`  Action items: ${extraction.actionItems.length}`)
-				);
-				console.log(
-					chalk.gray(`  Deliverables: ${extraction.deliverables.length}`)
-				);
-				console.log(
-					chalk.gray(`  Key points: ${extraction.keyPoints.length}`)
-				);
+				this.debugLog(`Chunk ${i + 1} results:`);
+				this.debugLog(`  Decisions: ${extraction.decisions.length}`);
+				this.debugLog(`  Action items: ${extraction.actionItems.length}`);
+				this.debugLog(`  Deliverables: ${extraction.deliverables.length}`);
+				this.debugLog(`  Key points: ${extraction.keyPoints.length}`);
+			} catch (error) {
+				throw wrapError(error, "extraction", {
+					chunkIndex: i + 1,
+					totalChunks: chunks.length,
+					model: this.config.model,
+					provider: this.config.provider,
+				});
 			}
 
 			if (i < chunks.length - 1) {
@@ -209,16 +196,11 @@ export class MeetingExtractor {
 
 		const processingTimeMs = Date.now() - startTime;
 
-		if (this.verbose) {
-			console.log(chalk.gray("\n🔧 [VERBOSE] Extraction complete"));
-			console.log(chalk.gray(`🔧 [VERBOSE] Total time: ${processingTimeMs}ms`));
-			console.log(chalk.gray(`🔧 [VERBOSE] Total extractions: ${extractions.length}`));
-
-			const totals = this.computeTotals(extractions);
-			console.log(chalk.gray(`🔧 [VERBOSE] Total decisions: ${totals.decisions}`));
-			console.log(chalk.gray(`🔧 [VERBOSE] Total action items: ${totals.actionItems}`));
-			console.log(chalk.gray(`🔧 [VERBOSE] Total deliverables: ${totals.deliverables}`));
-		}
+		const totals = this.computeTotals(extractions);
+		this.debugLog(`Extraction complete in ${processingTimeMs}ms`);
+		this.debugLog(`Total decisions: ${totals.decisions}`);
+		this.debugLog(`Total action items: ${totals.actionItems}`);
+		this.debugLog(`Total deliverables: ${totals.deliverables}`);
 
 		return {
 			extractions,
@@ -241,12 +223,8 @@ export class MeetingExtractor {
 		const startTime = Date.now();
 
 		try {
-			if (this.verbose) {
-				console.log(chalk.gray("🔧 [VERBOSE] Sending extraction request..."));
-				console.log(
-					chalk.gray(`🔧 [VERBOSE] Prompt length: ${prompt.length} characters`)
-				);
-			}
+			this.debugLog(`Sending extraction request...`);
+			this.debugLog(`Prompt length: ${prompt.length} characters`);
 
 			const { object, usage } = await generateObject({
 				model: this.model,
@@ -260,32 +238,21 @@ export class MeetingExtractor {
 
 			const duration = Date.now() - startTime;
 
-			if (this.verbose) {
-				console.log(chalk.gray("🔧 [VERBOSE] Extraction response received"));
-				console.log(chalk.gray(`🔧 [VERBOSE] Duration: ${duration}ms`));
-				if (usage) {
-					console.log(
-						chalk.gray(`🔧 [VERBOSE] Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`)
-					);
-				}
+			this.debugLog(`Response received in ${duration}ms`);
+			if (usage) {
+				this.debugLog(`Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`);
 			}
 
 			return object;
 		} catch (error: unknown) {
 			const duration = Date.now() - startTime;
+			const errorMessage = error instanceof Error ? error.message : String(error);
 
-			if (this.verbose) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
-				console.log(chalk.red(`🔧 [VERBOSE] Extraction failed: ${errorMessage}`));
-				console.log(chalk.red(`🔧 [VERBOSE] Duration before error: ${duration}ms`));
+			this.debugLog(`Extraction failed: ${errorMessage}`);
+			this.debugLog(`Duration before error: ${duration}ms`);
 
-				if (error instanceof Error && error.name === "AbortError") {
-					console.log(
-						chalk.red(
-							`🔧 [VERBOSE] Request aborted due to timeout after ${this.requestTimeoutMs}ms`
-						)
-					);
-				}
+			if (error instanceof Error && error.name === "AbortError") {
+				this.debugLog(`Request aborted due to timeout after ${this.requestTimeoutMs}ms`);
 			}
 
 			throw error;

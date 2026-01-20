@@ -18,6 +18,8 @@ import {
 	type ResolvedModel,
 	ConfigManager,
 } from "./model-config.js";
+import type { PipelineProgress } from "./meeting-progress.js";
+import { wrapError } from "./meeting-errors.js";
 
 export interface GeneratorConfig {
 	provider?: AIProvider;
@@ -25,6 +27,7 @@ export interface GeneratorConfig {
 	maxTokens?: number;
 	verbose?: boolean;
 	resolvedModel?: ResolvedModel;
+	progress?: PipelineProgress;
 }
 
 export interface GeneratorResult {
@@ -57,11 +60,12 @@ GUIDELINES:
 
 export class MeetingGenerator {
 	private verbose: boolean;
-	private config: Required<Omit<GeneratorConfig, "resolvedModel">> & {
+	private config: Required<Omit<GeneratorConfig, "resolvedModel" | "progress">> & {
 		resolvedModel?: ResolvedModel;
 	};
 	private model: Parameters<typeof generateObject>[0]["model"];
 	private requestTimeoutMs: number;
+	private progress?: PipelineProgress;
 
 	static async create(config: GeneratorConfig = {}): Promise<MeetingGenerator> {
 		const configManager = new ConfigManager();
@@ -121,6 +125,7 @@ export class MeetingGenerator {
 		};
 
 		this.verbose = this.config.verbose;
+		this.progress = config.progress;
 
 		const configManager = new ConfigManager();
 		const timeoutEnv = process.env.POOLSIDE_AI_REQUEST_TIMEOUT_MS;
@@ -136,13 +141,17 @@ export class MeetingGenerator {
 				? anthropic(this.config.model)
 				: openai(this.config.model);
 
-		if (this.verbose) {
-			console.log(chalk.gray("🔧 [VERBOSE] Meeting Generator initialized"));
-			console.log(chalk.gray(`🔧 [VERBOSE] Provider: ${this.config.provider}`));
-			console.log(chalk.gray(`🔧 [VERBOSE] Model: ${this.config.model}`));
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Max Tokens: ${this.config.maxTokens}`)
-			);
+		this.debugLog(`Meeting Generator initialized`);
+		this.debugLog(`Provider: ${this.config.provider}`);
+		this.debugLog(`Model: ${this.config.model}`);
+		this.debugLog(`Max Tokens: ${this.config.maxTokens}`);
+	}
+
+	private debugLog(message: string): void {
+		if (this.progress) {
+			this.progress.debug(message);
+		} else if (this.verbose) {
+			console.log(chalk.gray(`🔧 [VERBOSE] ${message}`));
 		}
 	}
 
@@ -163,27 +172,24 @@ export class MeetingGenerator {
 		const shouldGeneratePrd =
 			options.generatePrd !== false && refined.deliverables.length > 0;
 
-		if (this.verbose) {
-			console.log(chalk.gray("\n🔧 [VERBOSE] Starting resource generation"));
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Decisions: ${refined.decisions.length}`)
-			);
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Action items: ${refined.actionItems.length}`)
-			);
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Deliverables: ${refined.deliverables.length}`)
-			);
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Will generate PRD: ${shouldGeneratePrd}`)
-			);
-		}
+		this.debugLog(`Starting resource generation`);
+		this.debugLog(`Decisions: ${refined.decisions.length}`);
+		this.debugLog(`Action items: ${refined.actionItems.length}`);
+		this.debugLog(`Deliverables: ${refined.deliverables.length}`);
+		this.debugLog(`Will generate PRD: ${shouldGeneratePrd}`);
 
 		const notes = this.generateMeetingNotes(refined);
 
 		let prd: PRDDocument | undefined;
 		if (shouldGeneratePrd) {
-			prd = await this.generatePRD(refined);
+			try {
+				prd = await this.generatePRD(refined);
+			} catch (error) {
+				throw wrapError(error, "generation", {
+					model: this.config.model,
+					provider: this.config.provider,
+				});
+			}
 		}
 
 		const resources: MeetingResources = { notes, prd };
@@ -191,13 +197,8 @@ export class MeetingGenerator {
 
 		const processingTimeMs = Date.now() - startTime;
 
-		if (this.verbose) {
-			console.log(chalk.gray(`🔧 [VERBOSE] Generation completed`));
-			console.log(chalk.gray(`🔧 [VERBOSE] Duration: ${processingTimeMs}ms`));
-			console.log(
-				chalk.gray(`🔧 [VERBOSE] Markdown length: ${markdown.length} chars`)
-			);
-		}
+		this.debugLog(`Generation completed in ${processingTimeMs}ms`);
+		this.debugLog(`Markdown length: ${markdown.length} chars`);
 
 		return {
 			resources,
@@ -208,9 +209,7 @@ export class MeetingGenerator {
 	}
 
 	generateMeetingNotes(refined: RefinedMeeting): MeetingNotes {
-		if (this.verbose) {
-			console.log(chalk.gray("🔧 [VERBOSE] Generating meeting notes"));
-		}
+		this.debugLog(`Generating meeting notes`);
 
 		const title = this.inferMeetingTitle(refined);
 
@@ -261,21 +260,11 @@ export class MeetingGenerator {
 
 	async generatePRD(refined: RefinedMeeting): Promise<PRDDocument | undefined> {
 		if (refined.deliverables.length === 0) {
-			if (this.verbose) {
-				console.log(
-					chalk.gray("🔧 [VERBOSE] No deliverables - skipping PRD generation")
-				);
-			}
+			this.debugLog(`No deliverables - skipping PRD generation`);
 			return undefined;
 		}
 
-		if (this.verbose) {
-			console.log(
-				chalk.gray(
-					`🔧 [VERBOSE] Generating PRD for ${refined.deliverables.length} deliverables`
-				)
-			);
-		}
+		this.debugLog(`Generating PRD for ${refined.deliverables.length} deliverables`);
 
 		const prompt = this.buildPRDPrompt(refined);
 
@@ -285,12 +274,8 @@ export class MeetingGenerator {
 		}, this.requestTimeoutMs);
 
 		try {
-			if (this.verbose) {
-				console.log(chalk.gray("🔧 [VERBOSE] Sending PRD generation request"));
-				console.log(
-					chalk.gray(`🔧 [VERBOSE] Prompt length: ${prompt.length} characters`)
-				);
-			}
+			this.debugLog(`Sending PRD generation request`);
+			this.debugLog(`Prompt length: ${prompt.length} characters`);
 
 			const { object, usage } = await generateObject({
 				model: this.model,
@@ -302,31 +287,16 @@ export class MeetingGenerator {
 				abortSignal: abortController.signal,
 			});
 
-			if (this.verbose) {
-				console.log(chalk.gray("🔧 [VERBOSE] PRD generation completed"));
-				if (usage) {
-					console.log(
-						chalk.gray(
-							`🔧 [VERBOSE] Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`
-						)
-					);
-				}
-				console.log(
-					chalk.gray(
-						`🔧 [VERBOSE] Requirements generated: ${object.requirements.length}`
-					)
-				);
+			this.debugLog(`PRD generation completed`);
+			if (usage) {
+				this.debugLog(`Tokens - prompt: ${usage.promptTokens}, completion: ${usage.completionTokens}`);
 			}
+			this.debugLog(`Requirements generated: ${object.requirements.length}`);
 
 			return this.convertToPRDDocument(object);
 		} catch (error: unknown) {
-			if (this.verbose) {
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
-				console.log(
-					chalk.red(`🔧 [VERBOSE] PRD generation failed: ${errorMessage}`)
-				);
-			}
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			this.debugLog(`PRD generation failed: ${errorMessage}`);
 			throw error;
 		} finally {
 			clearTimeout(timeoutId);
