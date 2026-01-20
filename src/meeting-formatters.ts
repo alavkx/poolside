@@ -279,3 +279,12 @@ export function format(
 			throw new Error(`Unsupported output format: ${outputFormat}`);
 	}
 }
+
+export function slugify(title: string): string {
+	return title
+		.replace(/^Meeting Notes[:\s]*/i, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.replace(/-{2,}/g, "-") || "meeting";
+}

@@ -48,6 +48,7 @@ import {
   validateModelConfig,
   validateTranscript,
 } from "./model-validator.js";
+import { slugify } from "./meeting-formatters.js";
 
 interface ValidationResult {
   key: string;
@@ -582,12 +583,6 @@ program
   .description(
     "Process a meeting transcript to extract decisions, action items, and generate meeting notes"
   )
-  .option("-o, --output <file>", "Output file (default: stdout)")
-  .option(
-    "-f, --format <type>",
-    "Output format: markdown, json (default: markdown)",
-    "markdown"
-  )
   .option("--no-prd", "Skip PRD generation even if deliverables are found")
   .option("--preset <name>", "Use a named preset (e.g., fast, quality, balanced, cheap)")
   .option(
@@ -599,8 +594,6 @@ program
     async (
       file: string,
       options: {
-        output?: string;
-        format: string;
         prd: boolean;
         preset?: string;
         model?: string;
@@ -718,34 +711,16 @@ program
           prdGenerated: generatorResult.prdGenerated,
         };
 
-        const processedMeeting: ProcessedMeeting = {
-          output: editorResult.output,
-          metadata,
-          stats,
-        };
+        const title = editorResult.output.notes.title || "Meeting Notes";
+        const slugifiedTitle = slugify(title);
+        const dateId = metadata.date || "undated";
+        const outputFilename = `${slugifiedTitle}-${dateId}.md`;
+        const outputPath = path.resolve(process.cwd(), outputFilename);
 
-        const format = options.format.toLowerCase();
-        let output: string;
+        await fs.writeFile(outputPath, editorResult.output.markdown, "utf8");
 
-        if (format === "json") {
-          output = JSON.stringify(processedMeeting, null, 2);
-        } else {
-          output = editorResult.output.markdown;
-        }
-
-        if (options.output) {
-          const outputPath = path.isAbsolute(options.output)
-            ? options.output
-            : path.resolve(process.cwd(), options.output);
-          await fs.writeFile(outputPath, output, "utf8");
-          console.log(chalk.green(`\n✅ Complete! (${formatDuration(totalTime)})`));
-          console.log(chalk.gray(`Output: ${outputPath}`));
-        } else {
-          console.log("\n" + "─".repeat(60));
-          console.log(output);
-          console.log("─".repeat(60));
-          console.log(chalk.green(`\n✅ Complete! (${formatDuration(totalTime)})`));
-        }
+        console.log(chalk.green(`\n✅ Complete! (${formatDuration(totalTime)})`));
+        console.log(chalk.blue(`📄 ${outputFilename}`))
 
         if (options.verbose) {
           console.log(chalk.blue("\n📊 Processing Summary"));

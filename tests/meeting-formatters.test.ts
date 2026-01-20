@@ -7,6 +7,7 @@ import {
 	formatDecisionsList,
 	formatOpenQuestionsList,
 	format,
+	slugify,
 } from "../src/meeting-formatters";
 import type {
 	MeetingNotes,
@@ -470,5 +471,37 @@ describe("format", () => {
 
 		expect(result).toContain("| Owner | Task | Due |");
 		expect(result).not.toContain("| Owner | Task | Due | Priority |");
+	});
+});
+
+describe("slugify", () => {
+	it("should convert title to URL-friendly slug", () => {
+		expect(slugify("Project Kickoff Meeting")).toBe("project-kickoff-meeting");
+	});
+
+	it("should strip 'Meeting Notes:' prefix", () => {
+		expect(slugify("Meeting Notes: Q1 Planning")).toBe("q1-planning");
+		expect(slugify("Meeting Notes Q1 Planning")).toBe("q1-planning");
+	});
+
+	it("should handle special characters", () => {
+		expect(slugify("Design Review (v2.0)")).toBe("design-review-v2-0");
+		expect(slugify("Sprint #5 - Retrospective")).toBe("sprint-5-retrospective");
+	});
+
+	it("should collapse multiple hyphens", () => {
+		expect(slugify("Project   Update")).toBe("project-update");
+		expect(slugify("One---Two")).toBe("one-two");
+	});
+
+	it("should trim leading and trailing hyphens", () => {
+		expect(slugify("---title---")).toBe("title");
+		expect(slugify("  title  ")).toBe("title");
+	});
+
+	it("should return 'meeting' for empty or whitespace-only input", () => {
+		expect(slugify("")).toBe("meeting");
+		expect(slugify("   ")).toBe("meeting");
+		expect(slugify("---")).toBe("meeting");
 	});
 });
